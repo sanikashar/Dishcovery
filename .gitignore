@@ -4,6 +4,9 @@ Docker/__pycache__
 
 venv/
 
+#data files
+data/
+
 *.pyc
 __pycache__/
 
