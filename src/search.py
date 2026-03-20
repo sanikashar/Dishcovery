@@ -1,6 +1,7 @@
 import json
 import heapq
 from preprocess import preprocess_query
+from similarity import get_similarity_scores
 
 def load_processed_data():
     with open("src/init.json", "r", encoding="utf-8") as f:
@@ -63,7 +64,7 @@ def restaurant_search(query):
             city_restaurants.append(restaurant)
 
     # temporary fake similarity scores (replace later)
-    similarity_scores = [1.0 - (i * 0.001) for i in range(len(city_restaurants))]
+    similarity_scores = get_similarity_scores(food_item, city_restaurants)
 
     # get top results using get_top_restaurants function
     top_results = get_top_restaurants(city_restaurants, similarity_scores, k=10)

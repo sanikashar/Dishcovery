@@ -86,6 +86,28 @@ def rank_restaurants(query: str, corpus: dict) -> list[dict]:
  
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
+
+def get_similarity_scores(query: str, restaurants: list[dict]) -> list[float]:
+    """
+    Convenience function for search.py.
+    Given a query and a list of restaurant dicts (already filtered by city),
+    returns a flat list of cosine similarity scores in the same order as the input.
+ 
+    Args:
+        query: user query e.g. "ramen" or "spicy tacos"
+        restaurants: city-filtered list of restaurant dicts from init.json
+ 
+    Returns:
+        List of float scores, one per restaurant, in the original order.
+        Scores are 0.0 for restaurants with no term overlap with the query.
+    """
+    if not restaurants:
+        return []
+ 
+    corpus = build_tfidf_corpus(restaurants)
+    query_vec = vectorize_query(query, corpus["vectorizer"])
+    scores = sklearn_cosine(query_vec, corpus["tfidf_matrix"]).flatten()
+    return [round(float(s), 6) for s in scores]
  
  
 if __name__ == "__main__":
