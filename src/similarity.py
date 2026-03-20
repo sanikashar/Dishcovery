@@ -135,7 +135,7 @@ def get_similarity_scores(query: str, restaurants: list[dict]) -> list[float]:
 if __name__ == "__main__":
     import json
 
-    with open("src/init.json", "r", encoding="utf-8") as f:
+    with open("init.json", "r", encoding="utf-8") as f:
         all_restaurants = json.load(f)
     
     city = "Philadelphia"
