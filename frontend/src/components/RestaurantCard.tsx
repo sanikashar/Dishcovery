@@ -1,11 +1,11 @@
 import { MapPin } from "lucide-react";
 
 export interface Restaurant {
-  id: number;
+  business_id: string;
   name: string;
   city: string;
   matchScore?: number;
-  mood: string;
+  mood?: string;
 // for potential future use
 //   cuisine: string[];
 //   rating: number;

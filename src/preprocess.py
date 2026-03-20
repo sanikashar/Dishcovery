@@ -1,5 +1,6 @@
 import json
 import re
+import heapq
 
 """
 Each entry in src/init.json looks like:

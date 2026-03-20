@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { SearchBar } from "../components/SearchBar";
-import { RestaurantCard } from "../components/RestaurantCard";
-import { restaurants } from "../data/restaurants";
+import { RestaurantCard, type Restaurant } from "../components/RestaurantCard";
 import { ArrowLeft, UtensilsCrossed } from "lucide-react";
 import dishcoveryLogo from "../assets/logo.png";
 
@@ -10,17 +9,31 @@ export function ResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const [results, setResults] = useState<Restaurant[]>([]);
   
-  // TODO: Replace with API call to backend to get restaurants with match scores
-  const results = restaurants;
 
   // Update search query when URL changes
   useEffect(() => {
-    const queryParam = searchParams.get("q");
-    if (queryParam) {
-      setSearchQuery(queryParam);
-    }
-  }, [searchParams]);
+  const queryParam = searchParams.get("q") || "";
+  setSearchQuery(queryParam);
+
+  if (!queryParam.trim()) {
+    setResults([]);
+    return;
+  }
+
+  const fetchResults = async () => {
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(queryParam)}`);
+      const data = await response.json();
+      setResults(data.results || []);
+    } catch {
+      setResults([]);
+    }  
+  };
+
+  fetchResults();
+}, [searchParams]);
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -75,7 +88,7 @@ export function ResultsPage() {
             {results.length > 0 ? (
               <div className="grid grid-cols-1 gap-4">
                 {results.map((restaurant) => (
-                  <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                  <RestaurantCard key={restaurant.business_id} restaurant={restaurant} />
                 ))}
               </div>
             ) : (
