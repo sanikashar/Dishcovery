@@ -1,4 +1,5 @@
 import json
+import heapq
 from preprocess import preprocess_query
 
 def load_processed_data():
