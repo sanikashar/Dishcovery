@@ -19,6 +19,7 @@ Each entry in src/init.json looks like:
     "categories": "...",
     "hours": {...}
   },
+  //Can get rid of this later
   "reviews": [
     {
       "review_id": "...",
@@ -33,6 +34,7 @@ Each entry in src/init.json looks like:
       "clean_text": "processed review text"
     }
   ],
+  //Cleaned, processed field of combines reviews for this business
   "combined_reviews": "all cleaned reviews joined together"
 }
 """
@@ -43,9 +45,6 @@ REVIEW_PATH = "data/sampled_reviews.json"
 
 # cleaned output file for the template
 OUTPUT_PATH = "src/init.json"
-
-# cap the number of reviews kept per business
-# MAX_REVIEWS_PER_BUSINESS = 50
 
 # simple stop word list
 STOP_WORDS = {
@@ -281,37 +280,16 @@ def preprocess_for_query(query, businesses, reviews):
     }
 
 def main():
-    # load Yelp files
     businesses = load_jsonl(BUSINESS_PATH)
     reviews = load_jsonl(REVIEW_PATH)
 
-    # build processed restaurant data for init.json
     processed_data = build_processed_restaurant_data(businesses, reviews)
-
-    # write cleaned data to src/init.json
     write_json(OUTPUT_PATH, processed_data)
 
     print("Wrote cleaned data to", OUTPUT_PATH)
     print("Number of restaurants saved:", len(processed_data))
 
-    # example query preprocessing test
-    example_query = "Philadelphia ramen"
-    query_result = preprocess_for_query(example_query, businesses, reviews)
-
-    print("Query test:")
-    print("error:", query_result["error"])
-    print("city:", query_result["city"])
-    print("food_item:", query_result["food_item"])
-    print("num city businesses:", len(query_result["businesses"]))
-    print("num city reviews:", len(query_result["reviews"]))
-
-    # test error for when city not in query
-    bad_query = "ramen"
-    bad_result = preprocess_for_query(bad_query, businesses, reviews)
-
-    print("Bad query test:")
-    print("error:", bad_result["error"])
-
 
 if __name__ == "__main__":
     main()
+
