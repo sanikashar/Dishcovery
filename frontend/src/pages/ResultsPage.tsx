@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { SearchBar } from "../components/SearchBar";
 import { RestaurantCard, type Restaurant } from "../components/RestaurantCard";
-import { ArrowLeft, UtensilsCrossed } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import dishcoveryLogo from "../assets/logo.png";
 
 export function ResultsPage() {
