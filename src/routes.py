@@ -7,6 +7,7 @@ import json
 import os
 from flask import send_from_directory, request, jsonify
 from models import db, Episode, Review
+from search import restaurant_search
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
 USE_LLM = False
@@ -49,6 +50,11 @@ def register_routes(app):
     def episodes_search():
         text = request.args.get("title", "")
         return jsonify(json_search(text))
+
+    @app.route("/api/search")
+    def restaurants_search():
+        text = request.args.get("q", "")
+        return jsonify(restaurant_search(text))
 
     if USE_LLM:
         from llm_routes import register_chat_route
