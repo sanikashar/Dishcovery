@@ -1,8 +1,10 @@
-import math
-import re
-import collections
 import ast
+import collections
+import difflib
 import json
+import math
+import os
+import re
 import os
 import numpy as np
 import gensim.downloader as api
@@ -11,6 +13,7 @@ from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
 
+from config import INIT_JSON_PATH
 
 '''
 Supports all 3 retrieval modes:
@@ -341,7 +344,24 @@ def rank_restaurants(query: str, corpus: dict, type: str = "word2vec") -> list[d
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
-def get_similarity_scores(query: str, restaurants: list[dict], type: str = "word2vec", field_weights: dict | None = None,) -> list[float]:
+def _correct_query(query: str, vectorizer) -> str:
+    """
+    Replace words not in the TF-IDF vocabulary with their closest match.
+    Words already in the vocabulary pass through unchanged.
+    Words with no close match (cutoff=0.75) are kept as-is.
+    """
+    vocab = list(vectorizer.vocabulary_.keys())
+    corrected = []
+    for word in query.lower().split():
+        if word in vectorizer.vocabulary_:
+            corrected.append(word)
+        else:
+            matches = difflib.get_close_matches(word, vocab, n=1, cutoff=0.75)
+            corrected.append(matches[0] if matches else word)
+    return " ".join(corrected)
+
+
+def get_similarity_scores(query: str, restaurants: list[dict]) -> list[float]:
     """
     Convenience function for search.py.
     Given a query and a list of restaurant dicts (already filtered by city),
@@ -360,19 +380,21 @@ def get_similarity_scores(query: str, restaurants: list[dict], type: str = "word
         return []
     
     corpus = build_corpus(restaurants, model_type=type, field_weights=field_weights)
+    corrected_query = _correct_query(query, corpus["vectorizer"])
+
     ranked_map = {
         id(corpus["restaurants"][i]): i
         for i in range(len(corpus["restaurants"]))
     }
  
     if type == "tfidf":      
-        query_vec = vectorize_query_tfidf(query, corpus)
+        query_vec = vectorize_query_tfidf(corrected_query, corpus)
         scores = sklearn_cosine(query_vec, corpus["tfidf_matrix"]).flatten()
     elif type == "word2vec":
-        query_vec = vectorize_query_w2v(query, corpus)
+        query_vec = vectorize_query_w2v(corrected_query, corpus)
         scores = fuse_scores(query_vec, corpus)
     elif type == "bert":
-        query_vec = vectorize_query_bert(query, corpus)
+        query_vec = vectorize_query_bert(corrected_query, corpus)
         scores = fuse_scores(query_vec, corpus)
     else:
         raise ValueError(f"Unknown type '{type}'. Choose tfidf, word2vec, or bert.")
@@ -381,8 +403,9 @@ def get_similarity_scores(query: str, restaurants: list[dict], type: str = "word
  
  
 if __name__ == "__main__":
-    
-    with open("src/init.json", "r", encoding="utf-8") as f:
+    import json
+
+    with open(os.path.join(os.path.dirname(__file__), "init.json"), "r", encoding="utf-8") as f:
         all_restaurants = json.load(f)
     
     city = "Philadelphia"
