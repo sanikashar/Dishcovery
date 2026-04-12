@@ -48,27 +48,60 @@ export function SearchBar({
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
 
   const prices = ["Price", "$", "$$", "$$$", "$$$$"];
-  const suggestions = ["Nashville cozy matcha", "romantic Italian", "trendy sushi", "casual brunch"];
+  const suggestions = ["Nashville cozy matcha", "Tampa romantic Italian", "Philadelphia trendy sushi"];
 
   const trimmedQuery = query.trim();
   const isCitySelected = city !== CITY_PLACEHOLDER && city !== "";
   const canSubmit = isCitySelected && trimmedQuery.length > 0;
 
+  const submitWith = (nextCity: string, nextQuery: string, nextRating: number = rating, nextPrice: string = price) => {
+    if (!onSubmit) return;
+    const cleanQuery = nextQuery.trim();
+    const hasCity = nextCity !== CITY_PLACEHOLDER && nextCity !== "";
+    if (!hasCity || cleanQuery.length === 0) return;
+    onSubmit({ city: nextCity, query: cleanQuery, rating: nextRating, price: nextPrice });
+  };
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (canSubmit && onSubmit) {
-      onSubmit({ city, query: trimmedQuery, rating, price });
-    }
+    submitWith(city, trimmedQuery, rating, price);
   };
+
+  const orderedCities = useMemo(
+    () => CITY_OPTIONS.filter((c) => c !== CITY_PLACEHOLDER).sort((a, b) => b.length - a.length),
+    []
+  );
 
   const handleSuggestionClick = (suggestion: string) => {
     setSelectedSuggestion(suggestion);
-    onQueryChange(suggestion);
+    let nextCity = city;
+    let nextQuery = suggestion;
+    const match = orderedCities.find((c) => suggestion.toLowerCase().startsWith(c.toLowerCase()));
+    if (match) {
+      nextCity = match;
+      const remainder = suggestion.slice(match.length).trimStart();
+      if (remainder) {
+        nextQuery = remainder;
+      }
+      onCityChange(match);
+    }
+
+    const resetRating = 0;
+    const resetPrice = "Price";
+    if (rating !== resetRating) {
+      onRatingChange(resetRating);
+    }
+    if (price !== resetPrice) {
+      onPriceChange(resetPrice);
+    }
+
+    onQueryChange(nextQuery);
+    submitWith(nextCity, nextQuery, resetRating, resetPrice);
   };
 
   const maybeAutoSubmit = (nextRating: number, nextPrice: string) => {
-    if (!autoSubmitOnFilterChange || !canSubmit || !onSubmit) return;
-    onSubmit({ city, query: trimmedQuery, rating: nextRating, price: nextPrice });
+    if (!autoSubmitOnFilterChange) return;
+    submitWith(city, query, nextRating, nextPrice);
   };
 
   const handleRatingInput = (value: number) => {
