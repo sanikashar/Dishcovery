@@ -1,5 +1,6 @@
 import heapq
 import json
+import os
 
 from config import INIT_JSON_PATH
 from preprocess import preprocess_query
@@ -11,7 +12,7 @@ _PROCESSED_DATA = None
 def load_processed_data():
     global _PROCESSED_DATA
     if _PROCESSED_DATA is None:
-        with INIT_JSON_PATH.open("r", encoding="utf-8") as f:
+        with open(os.path.join(os.path.dirname(__file__), "init.json"), "r", encoding="utf-8") as f:
             _PROCESSED_DATA = json.load(f)
     return _PROCESSED_DATA
 
