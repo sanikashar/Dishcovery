@@ -2,6 +2,7 @@ import heapq
 import json
 import os
 
+from config import INIT_JSON_PATH
 from preprocess import preprocess_query
 from similarity import get_similarity_scores
 
@@ -17,6 +18,25 @@ def load_processed_data():
 
 
 # gets top 10 restaurants by name, ensuring no duplicates, and returns them sorted by match score
+PRICE_MAP = {
+    1: "$",
+    2: "$$",
+    3: "$$$",
+    4: "$$$$",
+}
+
+
+def get_price_info(business):
+    attributes = business.get("attributes") or {}
+    price_value = attributes.get("RestaurantsPriceRange2") or business.get("RestaurantsPriceRange2")
+    try:
+        price_tier = int(price_value)
+    except (TypeError, ValueError):
+        price_tier = None
+    price_label = PRICE_MAP.get(price_tier)
+    return price_tier, price_label
+
+
 def get_top_restaurants(processed_restaurants, similarity_scores, k=10):
     best_by_name = {}
 
@@ -25,6 +45,7 @@ def get_top_restaurants(processed_restaurants, similarity_scores, k=10):
             continue
 
         business = restaurant["business"]
+        price_tier, price_label = get_price_info(business)
 
         entry = {
             "business_id": business["business_id"],
@@ -36,6 +57,8 @@ def get_top_restaurants(processed_restaurants, similarity_scores, k=10):
             "stars": business.get("stars"),
             "review_count": business.get("review_count"),
             "categories": business.get("categories"),
+            "priceTier": price_tier,
+            "priceRange": price_label,
             "matchScore": float(score)
         }
 

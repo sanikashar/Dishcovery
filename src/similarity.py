@@ -8,6 +8,7 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
 
+from config import INIT_JSON_PATH
 
 def build_tfidf_corpus(restaurants: list[dict]) -> dict:
     """
