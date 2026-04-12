@@ -28,6 +28,7 @@ interface SearchBarProps {
   price: string;
   onPriceChange: (value: string) => void;
   onSubmit?: (payload: { city: string; query: string; rating: number; price: string }) => void;
+  autoSubmitOnFilterChange?: boolean;
   placeholder?: string;
 }
 
@@ -41,6 +42,7 @@ export function SearchBar({
   onRatingChange,
   price,
   onPriceChange,
+  autoSubmitOnFilterChange = false,
   placeholder,
 }: SearchBarProps) {
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
@@ -62,6 +64,21 @@ export function SearchBar({
   const handleSuggestionClick = (suggestion: string) => {
     setSelectedSuggestion(suggestion);
     onQueryChange(suggestion);
+  };
+
+  const maybeAutoSubmit = (nextRating: number, nextPrice: string) => {
+    if (!autoSubmitOnFilterChange || !canSubmit || !onSubmit) return;
+    onSubmit({ city, query: trimmedQuery, rating: nextRating, price: nextPrice });
+  };
+
+  const handleRatingInput = (value: number) => {
+    onRatingChange(value);
+    maybeAutoSubmit(value, price);
+  };
+
+  const handlePriceInput = (value: string) => {
+    onPriceChange(value);
+    maybeAutoSubmit(rating, value);
   };
 
   const normalizedCity = useMemo(() => {
@@ -123,7 +140,7 @@ export function SearchBar({
                 max="5"
                 step="0.5"
                 value={rating}
-                onChange={(e) => onRatingChange(parseFloat(e.target.value))}
+                onChange={(e) => handleRatingInput(parseFloat(e.target.value))}
                 className="w-full h-2 bg-red-100 rounded-full appearance-none cursor-pointer
                   [&::-webkit-slider-thumb]:appearance-none
                   [&::-webkit-slider-thumb]:w-5
@@ -157,7 +174,7 @@ export function SearchBar({
           <div className="relative">
             <select
               value={price}
-              onChange={(e) => onPriceChange(e.target.value)}
+              onChange={(e) => handlePriceInput(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 rounded-full border-2 border-red-200 bg-white text-sm text-gray-700 cursor-pointer hover:border-red-300 transition-colors"
             >
               {prices.map((price) => (

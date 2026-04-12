@@ -29,10 +29,16 @@ PRICE_MAP = {
 def get_price_info(business):
     attributes = business.get("attributes") or {}
     price_value = attributes.get("RestaurantsPriceRange2") or business.get("RestaurantsPriceRange2")
-    try:
+    price_tier = None
+    if isinstance(price_value, (int, float)):
         price_tier = int(price_value)
-    except (TypeError, ValueError):
-        price_tier = None
+    elif isinstance(price_value, str):
+        cleaned = price_value.strip()
+        if cleaned.startswith("u'") and cleaned.endswith("'"):
+            cleaned = cleaned[2:-1]
+        cleaned = cleaned.strip("'\"")
+        if cleaned.isdigit():
+            price_tier = int(cleaned)
     price_label = PRICE_MAP.get(price_tier)
     return price_tier, price_label
 
