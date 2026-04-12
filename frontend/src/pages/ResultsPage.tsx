@@ -7,25 +7,70 @@ import dishcoveryLogo from "../assets/logo.png";
 
 const CITY_PLACEHOLDER = "City";
 
+const PRICE_PLACEHOLDER = "Price";
+
+const formatPriceFromParam = (param: string | null): string => {
+  if (!param || param === PRICE_PLACEHOLDER) return PRICE_PLACEHOLDER;
+  if (/^\$+$/.test(param)) return param;
+  const numeric = Number(param);
+  if (Number.isNaN(numeric) || numeric <= 0) return PRICE_PLACEHOLDER;
+  return "$".repeat(numeric);
+};
+
+const priceStringToTier = (price: string): number | null => {
+  if (!price || price === PRICE_PLACEHOLDER) return null;
+  if (/^\$+$/.test(price)) return price.length;
+  const numeric = Number(price);
+  return Number.isNaN(numeric) ? null : numeric;
+};
+
+const restaurantMatchesFilters = (restaurant: Restaurant, minRating: number, priceFilter: string): boolean => {
+  const rating = restaurant.rating ?? restaurant.stars ?? 0;
+  if (rating < minRating) return false;
+
+  if (priceFilter === PRICE_PLACEHOLDER) return true;
+
+  const tier = restaurant.priceTier ?? priceStringToTier(restaurant.priceRange ?? "");
+  if (tier == null) return false;
+
+  const targetTier = priceStringToTier(priceFilter);
+  if (targetTier == null) return true;
+
+  return tier === targetTier;
+};
+
 export function ResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialQuery = searchParams.get("q") || "";
   const initialCity = searchParams.get("city") || CITY_PLACEHOLDER;
+  const initialRating = Number(searchParams.get("rating") || "0");
+  const initialPriceParam = searchParams.get("price");
+  const initialPrice = formatPriceFromParam(initialPriceParam);
   const [searchInput, setSearchInput] = useState(initialQuery);
   const [selectedCity, setSelectedCity] = useState(initialCity);
+  const [ratingFilter, setRatingFilter] = useState(initialRating);
+  const [priceFilter, setPriceFilter] = useState(initialPrice);
   const [activeQuery, setActiveQuery] = useState(initialQuery);
   const [activeCity, setActiveCity] = useState(initialCity);
+  const [activeRating, setActiveRating] = useState(initialRating);
+  const [activePrice, setActivePrice] = useState(initialPrice);
   const [results, setResults] = useState<Restaurant[]>([]);
 
   // Update search query when URL changes
   useEffect(() => {
     const queryParam = searchParams.get("q") || "";
     const cityParam = searchParams.get("city") || CITY_PLACEHOLDER;
+    const ratingParam = Number(searchParams.get("rating") || "0");
+    const priceParam = formatPriceFromParam(searchParams.get("price"));
     setSearchInput(queryParam);
     setSelectedCity(cityParam);
+    setRatingFilter(ratingParam);
+    setPriceFilter(priceParam);
     setActiveQuery(queryParam);
     setActiveCity(cityParam);
+    setActiveRating(ratingParam);
+    setActivePrice(priceParam);
 
     const trimmedQuery = queryParam.trim();
     const hasCity = cityParam !== CITY_PLACEHOLDER && cityParam.trim().length > 0;
@@ -40,7 +85,9 @@ export function ResultsPage() {
         const combinedQuery = `${cityParam} ${trimmedQuery}`.trim();
         const response = await fetch(`/api/search?q=${encodeURIComponent(combinedQuery)}`);
         const data = await response.json();
-        setResults(data.results || []);
+        const list: Restaurant[] = data.results || [];
+        const filtered = list.filter((restaurant) => restaurantMatchesFilters(restaurant, ratingParam, priceParam));
+        setResults(filtered);
       } catch {
         setResults([]);
       }
@@ -57,8 +104,27 @@ export function ResultsPage() {
     setSelectedCity(value);
   };
 
-  const handleSearchSubmit = ({ city, query }: { city: string; query: string }) => {
-    navigate(`/results?city=${encodeURIComponent(city)}&q=${encodeURIComponent(query)}`, { replace: true });
+  const handleRatingChange = (value: number) => {
+    setRatingFilter(value);
+  };
+
+  const handlePriceChange = (value: string) => {
+    setPriceFilter(value);
+  };
+
+  const handleSearchSubmit = ({ city, query, rating, price }: { city: string; query: string; rating: number; price: string }) => {
+    const params = new URLSearchParams({
+      city,
+      q: query,
+    });
+    if (rating > 0) {
+      params.set("rating", rating.toString());
+    }
+    if (price !== PRICE_PLACEHOLDER) {
+      const tier = priceStringToTier(price);
+      params.set("price", tier ? tier.toString() : price);
+    }
+    navigate(`/results?${params.toString()}`, { replace: true });
   };
 
   return (
@@ -92,6 +158,10 @@ export function ResultsPage() {
               onQueryChange={handleInputChange}
               city={selectedCity}
               onCityChange={handleCityChange}
+              rating={ratingFilter}
+              onRatingChange={handleRatingChange}
+              price={priceFilter}
+              onPriceChange={handlePriceChange}
               onSubmit={handleSearchSubmit}
               placeholder="Search for restaurants, cuisines, or vibes..."
             />
@@ -107,7 +177,7 @@ export function ResultsPage() {
             <div className="mb-6">
               <h2 className="text-lg text-gray-700">
                 {activeQuery && activeCity !== CITY_PLACEHOLDER
-                  ? `Found ${results.length} restaurant${results.length !== 1 ? "s" : ""} in ${activeCity} matching "${activeQuery}"`
+                  ? `Found ${results.length} restaurant${results.length !== 1 ? "s" : ""} in ${activeCity} matching "${activeQuery}"${activeRating > 0 ? ` • ≥ ${activeRating.toFixed(1)}★` : ""}${activePrice !== PRICE_PLACEHOLDER ? ` • ${activePrice}` : ""}`
                   : `Showing ${results.length} restaurants`}
               </h2>
             </div>

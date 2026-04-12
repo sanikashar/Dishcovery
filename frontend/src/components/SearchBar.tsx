@@ -23,7 +23,11 @@ interface SearchBarProps {
   onQueryChange: (value: string) => void;
   city: string;
   onCityChange: (value: string) => void;
-  onSubmit?: (payload: { city: string; query: string }) => void;
+  rating: number;
+  onRatingChange: (value: number) => void;
+  price: string;
+  onPriceChange: (value: string) => void;
+  onSubmit?: (payload: { city: string; query: string; rating: number; price: string }) => void;
   placeholder?: string;
 }
 
@@ -33,10 +37,12 @@ export function SearchBar({
   city,
   onCityChange,
   onSubmit,
+  rating,
+  onRatingChange,
+  price,
+  onPriceChange,
   placeholder,
 }: SearchBarProps) {
-  const [starRating, setStarRating] = useState(0);
-  const [selectedPrice, setSelectedPrice] = useState("Price");
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
 
   const prices = ["Price", "$", "$$", "$$$", "$$$$"];
@@ -49,7 +55,7 @@ export function SearchBar({
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (canSubmit && onSubmit) {
-      onSubmit({ city, query: trimmedQuery });
+      onSubmit({ city, query: trimmedQuery, rating, price });
     }
   };
 
@@ -116,8 +122,8 @@ export function SearchBar({
                 min="0"
                 max="5"
                 step="0.5"
-                value={starRating}
-                onChange={(e) => setStarRating(parseFloat(e.target.value))}
+                value={rating}
+                onChange={(e) => onRatingChange(parseFloat(e.target.value))}
                 className="w-full h-2 bg-red-100 rounded-full appearance-none cursor-pointer
                   [&::-webkit-slider-thumb]:appearance-none
                   [&::-webkit-slider-thumb]:w-5
@@ -130,17 +136,17 @@ export function SearchBar({
                   [&::-moz-range-thumb]:cursor-pointer
                   [&::-moz-range-thumb]:border-0"
                 style={{
-                  background: `linear-gradient(to right, #dc2626 0%, #dc2626 ${(starRating / 5) * 100}%, #fee2e2 ${(starRating / 5) * 100}%, #fee2e2 100%)`
+                  background: `linear-gradient(to right, #dc2626 0%, #dc2626 ${(rating / 5) * 100}%, #fee2e2 ${(rating / 5) * 100}%, #fee2e2 100%)`
                 }}
               />
               <Star
                 className="size-5 text-red-600 fill-red-600 absolute top-1/2 -translate-y-1/2 pointer-events-none transition-all z-10"
-                style={{ left: `calc(${(starRating / 5) * 100}% - 10px)` }}
+                style={{ left: `calc(${(rating / 5) * 100}% - 10px)` }}
               />
             </div>
             <div className="flex justify-between items-center text-xs text-gray-500 mt-1 relative">
               <span>0</span>
-              <span className="absolute left-1/2 -translate-x-1/2">{starRating.toFixed(1)}</span>
+              <span className="absolute left-1/2 -translate-x-1/2">{rating.toFixed(1)}</span>
               <span>5</span>
             </div>
           </div>
@@ -150,8 +156,8 @@ export function SearchBar({
         <div className="flex items-center gap-2">
           <div className="relative">
             <select
-              value={selectedPrice}
-              onChange={(e) => setSelectedPrice(e.target.value)}
+              value={price}
+              onChange={(e) => onPriceChange(e.target.value)}
               className="appearance-none pl-3 pr-8 py-2 rounded-full border-2 border-red-200 bg-white text-sm text-gray-700 cursor-pointer hover:border-red-300 transition-colors"
             >
               {prices.map((price) => (

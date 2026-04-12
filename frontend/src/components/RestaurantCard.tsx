@@ -11,6 +11,7 @@ export interface Restaurant {
   rating?: number;
   stars?: number;
   priceRange?: string;
+  priceTier?: number | null;
   ambience?: string[];
   hours?: string;
   matchExplanation?: string;
@@ -32,6 +33,10 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
     restaurant.ambience && restaurant.ambience.length > 0
       ? restaurant.ambience
       : categoriesList.slice(1, 4);
+
+  const priceDisplay =
+    restaurant.priceRange ??
+    (restaurant.priceTier && restaurant.priceTier > 0 ? "$".repeat(restaurant.priceTier) : undefined);
 
   const ratingValue = restaurant.rating ?? restaurant.stars;
   const location = [restaurant.city, restaurant.state].filter(Boolean).join(", ") || restaurant.city;
@@ -67,10 +72,10 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
           <MapPin className="size-4 text-gray-400" />
           <span>{location}</span>
         </div>
-        {restaurant.priceRange && (
+        {priceDisplay && (
           <div className="flex items-center gap-1.5">
             <DollarSign className="size-4 text-gray-400" />
-            <span>{restaurant.priceRange}</span>
+            <span>{priceDisplay}</span>
           </div>
         )}
         {primaryCuisine && (

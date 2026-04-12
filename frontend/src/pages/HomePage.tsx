@@ -7,14 +7,19 @@ import dishcoveryLogo from "../assets/logo.png";
 export function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("City");
+  const [ratingFilter, setRatingFilter] = useState(0);
+  const [priceFilter, setPriceFilter] = useState("Price");
   const navigate = useNavigate();
 
   const handleInputChange = (query: string) => {
     setSearchQuery(query);
   };
 
-  const handleSearchSubmit = ({ city, query }: { city: string; query: string }) => {
-    navigate(`/results?city=${encodeURIComponent(city)}&q=${encodeURIComponent(query)}`);
+  const handleSearchSubmit = ({ city, query, rating, price }: { city: string; query: string; rating: number; price: string }) => {
+    const params = new URLSearchParams({ city, q: query });
+    if (rating > 0) params.set("rating", rating.toString());
+    if (price !== "Price") params.set("price", price);
+    navigate(`/results?${params.toString()}`);
   };
 
   return (
@@ -50,6 +55,10 @@ export function HomePage() {
           onQueryChange={handleInputChange}
           city={selectedCity}
           onCityChange={setSelectedCity}
+          rating={ratingFilter}
+          onRatingChange={setRatingFilter}
+          price={priceFilter}
+          onPriceChange={setPriceFilter}
           onSubmit={handleSearchSubmit}
           placeholder="Try 'cozy Italian' or 'spicy ramen'..."
         />
