@@ -49,3 +49,6 @@ helpers/
 json_template/
 templates/
 static/
+src/bert_cache_*.pkl
+src/__pycache__/
+
