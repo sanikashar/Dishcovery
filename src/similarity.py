@@ -391,6 +391,10 @@ def fuse_scores(query_vec: np.ndarray, corpus: dict) -> np.ndarray:
 
 def rank_restaurants(query: str, corpus: dict, type: str = "word2vec") -> list[dict]:
     if type in ("tfidf", "tfidf+svd", "svd"):
+        query = _correct_query(query, corpus["vectorizer"])
+    elif type == "word2vec":
+        query = _correct_query(query, corpus["tfidf_vec"])
+    if type in ("tfidf", "tfidf+svd", "svd"):
         query_vec = vectorize_query_tfidf_svd(query, corpus)
         scores = sklearn_cosine(
             query_vec.reshape(1, -1), corpus["doc_vectors"]
@@ -418,15 +422,16 @@ def rank_restaurants(query: str, corpus: dict, type: str = "word2vec") -> list[d
     results.sort(key=lambda x: x["score"], reverse=True)
     return results
 
+# used ChatGPT to help debug this function when it stopped working after adding SVD
 def _correct_query(query: str, vectorizer) -> str:
     """
     Replace words not in the TF-IDF vocabulary with their closest match.
     Words already in the vocabulary pass through unchanged.
-    Words with no close match (cutoff=0.75) are kept as-is.
+    Words with no close match (cutoff=0.6) are kept as-is.
     """
     vocab = list(vectorizer.vocabulary_.keys())
     corrected = []
-    for word in query.lower().split():
+    for word in re.findall(r'\b\w+\b', query.lower()):
         if word in vectorizer.vocabulary_:
             corrected.append(word)
         else:
