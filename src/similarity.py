@@ -13,6 +13,7 @@ import gensim.downloader as api
 from gensim.models import Word2Vec
 from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
 
 from config import INIT_JSON_PATH
@@ -171,20 +172,22 @@ DEFAULT_FIELD_WEIGHTS = {
     "practical": 0.15,
 }
 
-def build_corpus(restaurants: list[dict], model_type: str = "word2vec", field_weights: dict | None = None,) -> dict:
+def build_corpus(restaurants: list[dict], model_type: str = "word2vec", field_weights: dict | None = None, svd_n_components: int = 100) -> dict:
     weights = {**DEFAULT_FIELD_WEIGHTS, **(field_weights or {})}
  
-    if model_type == "tfidf":
-        return _build_tfidf_corpus(restaurants)
+    if model_type in ("tfidf+svd", "tfidf", "svd"): 
+        return _build_tfidf_svd_corpus(restaurants, n_components=svd_n_components)
     elif model_type == "word2vec":
         return _build_word2vec_corpus(restaurants, weights)
     elif model_type == "bert":
         return _build_bert_corpus(restaurants, weights)
+    elif model_type == "bert+svd":
+        return _build_bert_svd_corpus(restaurants, weights, n_components=svd_n_components)
     else:
         raise ValueError(f"Unknown model_type '{model_type}'. Choose tfidf | word2vec | bert.")
     
 # TF-IDF corpus
-def _build_tfidf_corpus(restaurants: list[dict]) -> dict:
+def _build_tfidf_svd_corpus(restaurants: list[dict], n_components: int = 100) -> dict:
     documents = []
     for r in restaurants:
         fields = extract_fields(r)
@@ -203,14 +206,23 @@ def _build_tfidf_corpus(restaurants: list[dict]) -> dict:
         ngram_range=(1, 2),
     )
     tfidf_matrix = vectorizer.fit_transform(documents)
+    
+    max_k = min(tfidf_matrix.shape) - 1
+    n_components = min(n_components, max_k)
+
+    svd = TruncatedSVD(n_components=n_components, random_state=42)
+    doc_vectors = svd.fit_transform(tfidf_matrix)        # (N, k)
+
+    print(f"[similarity] TF-IDF+SVD ready — {n_components} dims, "
+          f"variance explained: {svd.explained_variance_ratio_.sum():.1%}")
  
     return {
-        "model_type":  "tfidf",
+        "model_type":  "tfidf+svd",
         "vectorizer":  vectorizer,
-        "tfidf_matrix": tfidf_matrix,
+        "svd":         svd,          
+        "doc_vectors": doc_vectors,
         "restaurants": restaurants,
     }
- 
  # Word2Vec corpus  (late-fusion field vectors)
  
 def _build_word2vec_corpus(restaurants, field_weights):
@@ -321,11 +333,17 @@ def _build_bert_corpus(restaurants: list[dict], field_weights: dict) -> dict:
     }
     _save_bert_corpus(corpus, cache_key)
     return corpus
+
     
 # Query vectorization
  
-def vectorize_query_tfidf(query: str, corpus: dict):
-    return corpus["vectorizer"].transform([query])
+def vectorize_query_tfidf_svd(query: str, corpus: dict) -> np.ndarray:
+    """
+    Project query into the same SVD latent space as the documents.
+    query string → TF-IDF sparse vector (1, V) → SVD projection (k,)
+    """
+    tfidf_vec = corpus["vectorizer"].transform([query]) 
+    return corpus["svd"].transform(tfidf_vec)[0]
  
  
 def vectorize_query_w2v(query: str, corpus: dict) -> np.ndarray:
@@ -372,9 +390,11 @@ def fuse_scores(query_vec: np.ndarray, corpus: dict) -> np.ndarray:
 
 
 def rank_restaurants(query: str, corpus: dict, type: str = "word2vec") -> list[dict]:
-    if type == "tfidf":
-        query_vec = vectorize_query_tfidf(query, corpus)
-        scores = sklearn_cosine(query_vec, corpus["tfidf_matrix"]).flatten()
+    if type in ("tfidf", "tfidf+svd", "svd"):
+        query_vec = vectorize_query_tfidf_svd(query, corpus)
+        scores = sklearn_cosine(
+            query_vec.reshape(1, -1), corpus["doc_vectors"]
+        ).flatten()
     elif type == "word2vec":
         query_vec = vectorize_query_w2v(query, corpus)
         scores = fuse_scores(query_vec, corpus)
@@ -439,9 +459,12 @@ def get_similarity_scores(query: str, restaurants: list[dict], type: str = "word
     else:
         corrected_query = query
  
-    if type == "tfidf":      
-        query_vec = vectorize_query_tfidf(corrected_query, corpus)
-        scores = sklearn_cosine(query_vec, corpus["tfidf_matrix"]).flatten()
+    if type in ("tfidf", "tfidf+svd", "svd"):
+        corrected_query = _correct_query(query, corpus["vectorizer"])
+        query_vec = vectorize_query_tfidf_svd(corrected_query, corpus)
+        scores = sklearn_cosine(
+            query_vec.reshape(1, -1), corpus["doc_vectors"]
+        ).flatten()
     elif type == "word2vec":
         query_vec = vectorize_query_w2v(corrected_query, corpus)
         scores = fuse_scores(query_vec, corpus)
@@ -452,6 +475,101 @@ def get_similarity_scores(query: str, restaurants: list[dict], type: str = "word
         raise ValueError(f"Unknown type '{type}'. Choose tfidf, word2vec, or bert.")
     
     return [round(float(s), 6) for s in scores]
+
+def explain_svd_result(
+    query: str,
+    restaurant: dict,
+    corpus: dict,
+    top_n_dims: int = 5,
+    top_n_terms: int = 8,
+) -> dict:
+    """
+    For each top-contributing SVD dimension, show:
+      - how much the query activates it
+      - how much the restaurant activates it
+      - the top positive and negative terms defining that dimension
+    This is the per-result explainability your professor requires.
+    """
+    assert corpus["model_type"] in ("tfidf+svd", "svd"), \
+        "explain_svd_result() requires a tfidf+svd corpus"
+
+    svd        = corpus["svd"]
+    vectorizer = corpus["vectorizer"]
+    restaurants = corpus["restaurants"]
+    doc_vectors = corpus["doc_vectors"]   # (N, k)
+
+    biz_id = restaurant["business"]["business_id"]
+    rest_idx = next(
+        (i for i, r in enumerate(restaurants)
+         if r["business"]["business_id"] == biz_id),
+        None,
+    )
+    if rest_idx is None:
+        return {"error": "Restaurant not found in corpus"}
+
+    query_vec = vectorize_query_tfidf_svd(query, corpus)   # (k,)
+    rest_vec  = doc_vectors[rest_idx]                       # (k,)
+
+    # Per-dimension contribution to the cosine similarity
+    contributions = query_vec * rest_vec
+    q_norm = np.linalg.norm(query_vec)
+    r_norm = np.linalg.norm(rest_vec)
+    norm_contributions = contributions / (q_norm * r_norm) if q_norm > 0 and r_norm > 0 else contributions
+
+    top_dim_indices = np.argsort(np.abs(norm_contributions))[::-1][:top_n_dims]
+    Vt    = svd.components_                        # (k, V)
+    terms = vectorizer.get_feature_names_out()     # (V,)
+
+    top_dimensions = []
+    for dim_idx in top_dim_indices:
+        loadings    = Vt[dim_idx]
+        pos_terms   = [terms[i] for i in np.argsort(loadings)[::-1][:top_n_terms]]
+        neg_terms   = [terms[i] for i in np.argsort(loadings)[:top_n_terms]]
+        contribution = float(norm_contributions[dim_idx])
+
+        top_dimensions.append({
+            "dim_index":             int(dim_idx),
+            "query_activation":      round(float(query_vec[dim_idx]), 4),
+            "restaurant_activation": round(float(rest_vec[dim_idx]), 4),
+            "contribution":          round(contribution, 4),
+            "direction":             "positive" if contribution >= 0 else "negative",
+            "top_positive_terms":    pos_terms,
+            "top_negative_terms":    neg_terms,
+            "dimension_label":       " / ".join(pos_terms[:3]),
+        })
+
+    return {
+        "restaurant_name":   restaurant["business"]["name"],
+        "overall_score":     round(float(norm_contributions.sum()), 4),
+        "query_coords":      query_vec.tolist(),
+        "restaurant_coords": rest_vec.tolist(),
+        "top_dimensions":    top_dimensions,
+    }
+
+
+def describe_svd_dimensions(corpus: dict, n_dims: int = 10, n_terms: int = 10) -> list[dict]:
+    """
+    Returns a description of each latent dimension — use this for your
+    writeup section 'discuss what the latent dimensions you discover are'.
+    """
+    assert corpus["model_type"] in ("tfidf+svd", "svd"), \
+        "describe_svd_dimensions() requires a tfidf+svd corpus"
+
+    svd   = corpus["svd"]
+    terms = corpus["vectorizer"].get_feature_names_out()
+    Vt    = svd.components_   # (k, V)
+
+    results = []
+    for dim_idx in range(min(n_dims, Vt.shape[0])):
+        loadings = Vt[dim_idx]
+        results.append({
+            "dim_index":          dim_idx,
+            "singular_value":     round(float(svd.singular_values_[dim_idx]), 3),
+            "variance_explained": round(float(svd.explained_variance_ratio_[dim_idx]), 4),
+            "top_positive_terms": [terms[i] for i in np.argsort(loadings)[::-1][:n_terms]],
+            "top_negative_terms": [terms[i] for i in np.argsort(loadings)[:n_terms]],
+        })
+    return results
  
  
 if __name__ == "__main__":
@@ -477,15 +595,15 @@ if __name__ == "__main__":
 
     print(f"✓ Loaded {len(city_restaurants)} restaurants in {city}\n")
     print("=" * 100)
-    print("Building corpuses (this may take 1-2 minutes for Word2Vec)...")
+    print("Building corpuses")
     print("=" * 100)
 
     tfidf_corpus = build_corpus(city_restaurants, model_type="tfidf")
-    word2vec_corpus = build_corpus(city_restaurants, model_type="word2vec")
+    # word2vec_corpus = build_corpus(city_restaurants, model_type="word2vec")
     bert_corpus = build_corpus(city_restaurants, model_type="bert")
 
     print("\n" + "=" * 100)
-    print("COMPARISON: TF-IDF vs Word2Vec vs BERT")
+    print("COMPARISON: SVD+TF-IDF vs Word2Vec vs BERT")
     print("=" * 100)
     
     for query in test_queries:
@@ -499,12 +617,12 @@ if __name__ == "__main__":
             biz = r["business"]
             print(f"  {i}. [{r['score']:.4f}] {biz['name']} | {biz.get('categories', '')[:50]}")
         
-        # Word2Vec results
-        w2v_results = rank_restaurants(query, word2vec_corpus, type="word2vec")
-        print("\nWord2Vec Top 5:")
-        for i, r in enumerate(w2v_results[:5], 1):
-            biz = r["business"]
-            print(f"  {i}. [{r['score']:.4f}] {biz['name']} | {biz.get('categories', '')[:50]}")
+        # # Word2Vec results
+        # w2v_results = rank_restaurants(query, word2vec_corpus, type="word2vec")
+        # print("\nWord2Vec Top 5:")
+        # for i, r in enumerate(w2v_results[:5], 1):
+        #     biz = r["business"]
+        #     print(f"  {i}. [{r['score']:.4f}] {biz['name']} | {biz.get('categories', '')[:50]}")
         
         # BERT results
         bert_results = rank_restaurants(query, bert_corpus, type="bert")
@@ -514,14 +632,14 @@ if __name__ == "__main__":
             print(f"  {i}. [{r['score']:.4f}] {biz['name']} | {biz.get('categories', '')[:50]}")
         
         # Show overlap
-        tfidf_names = set(r["business"]["name"] for r in tfidf_results[:5])
-        w2v_names = set(r["business"]["name"] for r in w2v_results[:5])
-        bert_names = set(r["business"]["name"] for r in bert_results[:5])
+        # tfidf_names = set(r["business"]["name"] for r in tfidf_results[:5])
+        # w2v_names = set(r["business"]["name"] for r in w2v_results[:5])
+        # bert_names = set(r["business"]["name"] for r in bert_results[:5])
         
-        tfidf_w2v_overlap = len(tfidf_names & w2v_names)
-        tfidf_bert_overlap = len(tfidf_names & bert_names)
-        w2v_bert_overlap = len(w2v_names & bert_names)
+        # tfidf_w2v_overlap = len(tfidf_names & w2v_names)
+        # tfidf_bert_overlap = len(tfidf_names & bert_names)
+        # w2v_bert_overlap = len(w2v_names & bert_names)
         
-        print(f"\n📊 Top-5 Overlap: TF-IDF↔W2V={tfidf_w2v_overlap}, TF-IDF↔BERT={tfidf_bert_overlap}, W2V↔BERT={w2v_bert_overlap}")
+        # print(f"\n📊 Top-5 Overlap: TF-IDF↔W2V={tfidf_w2v_overlap}, TF-IDF↔BERT={tfidf_bert_overlap}, W2V↔BERT={w2v_bert_overlap}")
         print()
    

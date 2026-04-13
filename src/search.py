@@ -5,7 +5,13 @@ import os
 
 from config import INIT_JSON_PATH
 from preprocess import preprocess_query
-from similarity import build_corpus, rank_restaurants, DEFAULT_FIELD_WEIGHTS
+from similarity import (
+    build_corpus,
+    rank_restaurants,
+    explain_svd_result,
+    describe_svd_dimensions,
+    DEFAULT_FIELD_WEIGHTS,
+)
 
 from errors import (
     MISSING_QUERY,
@@ -16,7 +22,7 @@ from errors import (
 
 _PROCESSED_DATA = None
 _CORPUS_CACHE = {}
-SEARCH_SIMILARITY_MODEL = "bert"
+SEARCH_SIMILARITY_MODEL = "tfidf+svd"
 
 
 def load_processed_data():
