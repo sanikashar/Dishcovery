@@ -1,5 +1,6 @@
 import json
 import re
+from errors import RETRY_WITH_CITY
 
 """
 Each entry in src/init.json now looks like:
@@ -207,7 +208,7 @@ def preprocess_query(query, businesses):
 
     Returns:
     {
-        "error": None or "retry with city name",
+        "error": None or RETRY_WITH_CITY,
         "city": "...",
         "food_item": "..."
     }
@@ -216,7 +217,7 @@ def preprocess_query(query, businesses):
     city = extract_city(query, valid_cities)
     if city is None:
         return {
-            "error": "retry with city name",
+            "error": RETRY_WITH_CITY,
             "city": None,
             "food_item": None
         }
@@ -232,7 +233,7 @@ def preprocess_for_query(query, businesses, reviews):
     uts everything tg in the pipeline:
     query
     -> find city
-    -> if no valid city, return "retry with city name"
+    -> if no valid city, return RETRY_WITH_CITY
     -> filter businesses in that city
     -> filter reviews for those businesses
     -> extract food item from the rest of the query
@@ -242,7 +243,7 @@ def preprocess_for_query(query, businesses, reviews):
 
     if city is None:
         return {
-            "error": "retry with city name",
+            "error": RETRY_WITH_CITY,
             "city": None,
             "food_item": None,
             "businesses": [],
