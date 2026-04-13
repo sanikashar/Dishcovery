@@ -57,6 +57,7 @@ export function ResultsPage() {
   const [activeRating, setActiveRating] = useState(initialRating);
   const [activePrice, setActivePrice] = useState(initialPrice);
   const [results, setResults] = useState<Restaurant[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Update search query when URL changes
   useEffect(() => {
@@ -78,10 +79,12 @@ export function ResultsPage() {
 
     if (!trimmedQuery || !hasCity) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
     const fetchResults = async () => {
+      setLoading(true);
       try {
         const combinedQuery = `${cityParam} ${trimmedQuery}`.trim();
         const response = await fetch(`/api/search?q=${encodeURIComponent(combinedQuery)}`);
@@ -125,6 +128,8 @@ export function ResultsPage() {
         setResults(filtered);
       } catch {
         setResults([]);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -212,35 +217,41 @@ export function ResultsPage() {
           <div>
             <div className="mb-6">
               <h2 className="text-lg text-gray-700">
-                {activeQuery && activeCity !== CITY_PLACEHOLDER
-                  ? `Found ${results.length} restaurant${results.length !== 1 ? "s" : ""} in ${activeCity} matching "${activeQuery}"${activeRating > 0 ? ` • ≥ ${activeRating.toFixed(1)}★` : ""}${activePrice !== PRICE_PLACEHOLDER ? ` • ${activePrice}` : ""}`
-                  : `Showing ${results.length} restaurants`}
+                {loading
+                  ? "Searching..."
+                  : activeQuery && activeCity !== CITY_PLACEHOLDER
+                    ? `Found ${results.length} restaurant${results.length !== 1 ? "s" : ""} in ${activeCity} matching "${activeQuery}"${activeRating > 0 ? ` • ≥ ${activeRating.toFixed(1)}★` : ""}${activePrice !== PRICE_PLACEHOLDER ? ` • ${activePrice}` : ""}`
+                    : `Showing ${results.length} restaurants`}
               </h2>
             </div>
 
-            {results.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4">
-                {results.map((restaurant) => (
-                  <RestaurantCard key={restaurant.business_id} restaurant={restaurant} />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-3xl p-12 text-center border-2 border-red-100 shadow-sm">
-                <div className="bg-gradient-to-br from-red-100 to-rose-100 size-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <UtensilsCrossed className="size-10 text-red-600" />
+            {loading ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">Loading results...</p>
                 </div>
-                <h3 className="text-xl text-gray-700 mb-2">No restaurants found</h3>
-                <p className="text-gray-500 mb-4">
-                  Try adjusting your filters or search for something else
-                </p>
-                <button
-                  onClick={() => navigate("/")}
-                  className="px-6 py-2 bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-full hover:shadow-lg transition-all"
-                >
-                  Start new search
-                </button>
-              </div>
-            )}
+              ) : results.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {results.map((restaurant) => (
+                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl p-12 text-center border-2 border-red-100 shadow-sm">
+                  <div className="bg-gradient-to-br from-red-100 to-rose-100 size-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <UtensilsCrossed className="size-10 text-red-600" />
+                  </div>
+                  <h3 className="text-xl text-gray-700 mb-2">No restaurants found</h3>
+                  <p className="text-gray-500 mb-4">
+                    Try adjusting your filters or search for something else
+                  </p>
+                  <button
+                    onClick={() => navigate("/")}
+                    className="px-6 py-2 bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-full hover:shadow-lg transition-all"
+                  >
+                    Start new search
+                  </button>
+                </div>
+              )}
           </div>
         </div>
       </div>
