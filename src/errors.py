@@ -1,0 +1,5 @@
+MISSING_QUERY = "Missing search query"
+NO_RESTAURANTS_CITY = "No restaurants found in that city"
+NO_MATCHING_RESTAURANTS = "No matching restaurants found"
+INIT_DATA_LOAD_FAILED = "Failed to load restaurant data"
+RETRY_WITH_CITY = "retry with city name"

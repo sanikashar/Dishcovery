@@ -7,6 +7,13 @@ from config import INIT_JSON_PATH
 from preprocess import preprocess_query
 from similarity import build_corpus, rank_restaurants, DEFAULT_FIELD_WEIGHTS
 
+from errors import (
+    MISSING_QUERY,
+    NO_RESTAURANTS_CITY,
+    NO_MATCHING_RESTAURANTS,
+    INIT_DATA_LOAD_FAILED,
+)
+
 _PROCESSED_DATA = None
 _CORPUS_CACHE = {}
 SEARCH_SIMILARITY_MODEL = "bert"
@@ -15,8 +22,11 @@ SEARCH_SIMILARITY_MODEL = "bert"
 def load_processed_data():
     global _PROCESSED_DATA
     if _PROCESSED_DATA is None:
-        with open(os.path.join(os.path.dirname(__file__), "init.json"), "r", encoding="utf-8") as f:
-            _PROCESSED_DATA = json.load(f)
+        try:
+            with open(os.path.join(os.path.dirname(__file__), "init.json"), "r", encoding="utf-8") as f:
+                _PROCESSED_DATA = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return None
     return _PROCESSED_DATA
 
 
@@ -93,9 +103,11 @@ def get_top_restaurants(ranked_results, k=10):
 
 def restaurant_search(query):
     if not query or not query.strip():
-        return {"error": "Missing search query", "results": []}
+        return {"error": MISSING_QUERY, "results": []}
 
     processed_data = load_processed_data()
+    if processed_data is None:
+        return {"error": INIT_DATA_LOAD_FAILED, "results": []}
     businesses = [r["business"] for r in processed_data]
 
     query_info = preprocess_query(query, businesses)
@@ -110,7 +122,7 @@ def restaurant_search(query):
         if r["business"].get("city", "").lower().strip() == city
     ]
     if not city_restaurants:
-        return {"error": "No restaurants found in that city", "results": []}
+        return {"error": NO_RESTAURANTS_CITY, "results": []}
 
     # Use cached corpus for this city if available, otherwise build + cache it
     if city not in _CORPUS_CACHE:
@@ -125,6 +137,6 @@ def restaurant_search(query):
 
     top_results = get_top_restaurants(ranked_results, k=10)
     if not top_results:
-        return {"error": "No matching restaurants found", "results": []}
+        return {"error": NO_MATCHING_RESTAURANTS, "results": []}
 
     return {"error": None, "results": top_results}
