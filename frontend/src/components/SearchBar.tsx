@@ -6,7 +6,6 @@ const CITY_PLACEHOLDER = "City";
 
 const CITY_OPTIONS = [
   CITY_PLACEHOLDER,
-  "Philadelphia",
   "Tampa",
   "Indianapolis",
   "Nashville",
@@ -48,7 +47,7 @@ export function SearchBar({
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
 
   const prices = ["Price", "$", "$$", "$$$", "$$$$"];
-  const suggestions = ["Nashville cozy matcha", "Tampa romantic Italian", "Philadelphia trendy sushi"];
+  const suggestions = ["Nashville cozy matcha", "Tampa romantic Italian", "Tucson trendy sushi"];
 
   const trimmedQuery = query.trim();
   const isCitySelected = city !== CITY_PLACEHOLDER && city !== "";
