@@ -3,8 +3,10 @@ import { Clock, DollarSign, MapPin, Star, UtensilsCrossed } from "lucide-react";
 export interface Restaurant {
   business_id: string;
   name: string;
+  address?: string | string[];
   city: string;
   state?: string;
+  postal_code?: string;
   matchScore?: number;
   cuisine?: string[];
   categories?: string | string[];
@@ -62,6 +64,7 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
   const relevantSet = new Set(
     (restaurant.relevantTags ?? []).map((t) => t.toLowerCase()),
   );
+  const hasRelevantTags = relevantSet.size > 0;
 
   const priceDisplay =
     restaurant.priceRange ??
@@ -97,7 +100,11 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
   const todayHours = formatHoursForToday();
 
   const ratingValue = restaurant.rating ?? restaurant.stars;
-  const location = [restaurant.city, restaurant.state].filter(Boolean).join(", ") || restaurant.city;
+  const street =
+    Array.isArray(restaurant.address)
+      ? restaurant.address.filter(Boolean).join(", ")
+      : restaurant.address?.trim();
+  const location = street ? `${street}, ${restaurant.city}` : restaurant.city;
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200">
@@ -109,6 +116,12 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
             {Math.round(restaurant.matchScore * 100)}% match
           </div>
         )}
+      </div>
+
+      {/* Location */}
+      <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
+        <MapPin className="size-4 text-gray-400" />
+        <span>{location}</span>
       </div>
 
       {/* Match Explanation */}
@@ -126,10 +139,6 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
             <span>{ratingValue.toFixed(1)}</span>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
-          <MapPin className="size-4 text-gray-400" />
-          <span>{location}</span>
-        </div>
         {priceDisplay && (
           <div className="flex items-center gap-1.5">
             <DollarSign className="size-4 text-gray-400" />
@@ -158,10 +167,10 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
             "px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-full text-sm",
             "px-3 py-1 bg-pink-50 text-pink-700 border border-pink-200 rounded-full text-sm",
           ];
-          const dimStyle = "px-3 py-1 bg-white text-gray-400 border border-gray-200 rounded-full text-sm";
+          const dimStyle = "px-3 py-1 bg-white text-gray-600 border border-gray-200 rounded-full text-sm";
           let colorIndex = 0;
           return derivedTags.map((tag, index) => {
-            const isRelevant = relevantSet.size === 0 || relevantSet.has(tag.toLowerCase());
+            const isRelevant = hasRelevantTags && relevantSet.has(tag.toLowerCase());
             const className = isRelevant
               ? coloredStyles[colorIndex++ % coloredStyles.length]
               : dimStyle;
