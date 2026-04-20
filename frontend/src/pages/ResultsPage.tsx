@@ -37,7 +37,7 @@ const restaurantMatchesFilters = (restaurant: Restaurant, minRating: number, pri
   const targetTier = priceStringToTier(priceFilter);
   if (targetTier == null) return true;
 
-  return tier === targetTier;
+  return tier <= targetTier;
 };
 
 export function ResultsPage() {
@@ -220,7 +220,7 @@ export function ResultsPage() {
                 {loading
                   ? "Searching..."
                   : activeQuery && activeCity !== CITY_PLACEHOLDER
-                    ? `Found ${results.length} restaurant${results.length !== 1 ? "s" : ""} in ${activeCity} matching "${activeQuery}"${activeRating > 0 ? ` • ≥ ${activeRating.toFixed(1)}★` : ""}${activePrice !== PRICE_PLACEHOLDER ? ` • ${activePrice}` : ""}`
+                    ? `Found ${results.length} restaurant${results.length !== 1 ? "s" : ""} in ${activeCity} matching "${activeQuery}"${activeRating > 0 ? ` • ≥ ${activeRating.toFixed(1)}★` : ""}${activePrice !== PRICE_PLACEHOLDER ? ` • ≤ ${activePrice}` : ""}`
                     : `Showing ${results.length} restaurants`}
               </h2>
             </div>
