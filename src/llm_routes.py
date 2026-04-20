@@ -1,16 +1,19 @@
 """
-LLM chat route — only loaded when USE_LLM = True in routes.py.
-Adds a POST /api/chat endpoint that performs LLM-driven RAG.
+LLM routes:
+  - POST /api/explain  — always registered, returns a 1-2 sentence LLM justification
+                         for why a retrieved restaurant matches the user query.
+  - POST /api/chat     — only loaded when USE_LLM = True in routes.py (legacy RAG chat).
 
 Setup:
-  1. Add API_KEY=your_key to .env
-  2. Set USE_LLM = True in routes.py
+  1. Add SPARK_API_KEY=your_key to .env
+  2. Optional Set USE_LLM = True in routes.py to enable the chat endpoint
 """
 import json
+import logging
 import os
 import re
-import logging
-from flask import request, jsonify, Response, stream_with_context
+
+from flask import Response, jsonify, request, stream_with_context
 from infosci_spark_client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -92,3 +95,88 @@ def register_chat_route(app, json_search):
             mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+
+# Debugged with limited help of GenAI, fixing prompt errors
+def register_explain_route(app):
+    """Register POST /api/explain — on-demand LLM justification for a single restaurant result."""
+    import ast
+
+    from search import load_processed_data
+
+    @app.route("/api/explain", methods=["POST"])
+    def explain():
+        data = request.get_json() or {}
+        business_id = (data.get("business_id") or "").strip()
+        query = (data.get("query") or "").strip()
+
+        if not business_id or not query:
+            return jsonify({"error": "business_id and query are required", "explanation": None}), 400
+
+        api_key = os.getenv("SPARK_API_KEY")
+        if not api_key:
+            return jsonify({"error": "SPARK_API_KEY not configured", "explanation": None}), 500
+
+        processed_data = load_processed_data()
+        if processed_data is None:
+            return jsonify({"error": "Restaurant data unavailable", "explanation": None}), 500
+
+        # Find the restaurant entry by business_id
+        entry = next((r for r in processed_data if r["business"].get("business_id") == business_id), None)
+        if entry is None:
+            return jsonify({"error": "Restaurant not found", "explanation": None}), 404
+
+        business = entry["business"]
+        reviews_text = (entry.get("combined_reviews") or "").strip()
+
+        # Parse ambience
+        ambience_raw = (business.get("attributes") or {}).get("Ambience") or {}
+        if isinstance(ambience_raw, str):
+            try:
+                ambience_raw = ast.literal_eval(ambience_raw)
+            except Exception:
+                ambience_raw = {}
+        ambience_terms = ", ".join(k for k, v in ambience_raw.items() if v is True) if isinstance(ambience_raw, dict) else ""
+
+        # Parse price
+        from search import get_price_info
+        price_tier, price_label = get_price_info(business)
+        price_display = price_label or (f"tier {price_tier}" if price_tier else "unknown")
+
+        name = business.get("name", "")
+        categories = business.get("categories", "")
+        stars = business.get("stars", "N/A")
+
+        # Truncate reviews to keep prompt compact
+        reviews_snippet = reviews_text[:400] if reviews_text else "No reviews available."
+
+        system_prompt = (
+            "You are a restaurant recommendation assistant. "
+            "Given a user query and restaurant details, write exactly 1-2 sentences "
+            "explaining why this specific restaurant matches the query. "
+            "Be concrete — reference the restaurant's actual attributes, not generic praise."
+        )
+        user_prompt = (
+            f"User query: \"{query}\"\n\n"
+            f"Restaurant: {name}\n"
+            f"Categories: {categories}\n"
+            f"Ambience: {ambience_terms or 'not specified'}\n"
+            f"Price: {price_display}\n"
+            f"Rating: {stars}/5\n"
+            f"Review excerpts: {reviews_snippet}\n\n"
+            "In 1-2 sentences, explain why this restaurant matches the user's query."
+        )
+
+        try:
+            client = LLMClient(api_key=api_key)
+            response = client.chat([
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ])
+            explanation = (response.get("content") or "").strip()
+            if not explanation:
+                return jsonify({"error": "Empty response from LLM", "explanation": None}), 500
+            return jsonify({"explanation": explanation, "error": None})
+        except Exception as e:
+            logger.error(f"LLM explain error for {business_id}: {e}")
+            return jsonify({"error": "Failed to generate explanation", "explanation": None}), 500
