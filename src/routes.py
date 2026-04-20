@@ -56,6 +56,9 @@ def register_routes(app):
         text = request.args.get("q", "")
         return jsonify(restaurant_search(text))
 
+    from llm_routes import register_explain_route
+    register_explain_route(app)
+
     if USE_LLM:
         from llm_routes import register_chat_route
         register_chat_route(app, json_search)

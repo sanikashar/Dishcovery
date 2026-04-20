@@ -4,7 +4,7 @@ import { SearchBar } from "../components/SearchBar";
 import { RestaurantCard, type Restaurant } from "../components/RestaurantCard";
 import { UtensilsCrossed, Pizza, Coffee, IceCream, Cake, Cookie, Croissant, Sandwich, Cherry } from "lucide-react";
 import dishcoveryLogo from "../assets/logo.png";
-import { generateMatchExplanation, getQueryAwareTags } from "../utils/matchExplanation";
+import { getQueryAwareTags } from "../utils/matchExplanation";
 
 const CITY_PLACEHOLDER = "City";
 
@@ -101,25 +101,10 @@ export function ResultsPage() {
           const ambienceTags = restaurant.ambience ?? [];
           const allTags = [...ambienceTags, ...categoriesList];
 
-          const rating = restaurant.rating ?? restaurant.stars ?? 0;
-          const price = restaurant.priceRange;
-          const score = restaurant.matchScore ?? 0;
-
-          const matchExplanation = generateMatchExplanation(
-            restaurant.name,
-            allTags,
-            trimmedQuery,
-            rating,
-            price,
-            score,
-            ratingParam > 0 ? ratingParam : undefined,
-          );
-
           const relevantTags = getQueryAwareTags(allTags, trimmedQuery);
 
           return {
             ...restaurant,
-            matchExplanation,
             relevantTags,
           };
         });
@@ -232,7 +217,7 @@ export function ResultsPage() {
               ) : results.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                   {results.map((restaurant) => (
-                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} />
+                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} />
                   ))}
                 </div>
               ) : (

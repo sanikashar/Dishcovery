@@ -30,4 +30,5 @@ frontend/dist/
 frontend/node_modules/
 package-lock.json
 
-.envsrc/bert_cache_*.pkl
+.env
+src/bert_cache_*.pkl
