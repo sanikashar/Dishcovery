@@ -1,4 +1,5 @@
-import { Clock, DollarSign, MapPin, Star, UtensilsCrossed } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, DollarSign, MapPin, Sparkles, Star, UtensilsCrossed } from "lucide-react";
+import { useState } from "react";
 
 export interface Restaurant {
   business_id: string;
@@ -22,6 +23,7 @@ export interface Restaurant {
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
+  query?: string;
 }
 
 const GENERIC_CATEGORIES = new Set([
@@ -42,7 +44,37 @@ const GENERIC_CATEGORIES = new Set([
   "Hotels & Travel",
 ]);
 
-export function RestaurantCard({ restaurant }: RestaurantCardProps) {
+export function RestaurantCard({ restaurant, query }: RestaurantCardProps) {
+  const [explainOpen, setExplainOpen] = useState(false);
+  const [llmExplanation, setLlmExplanation] = useState<string | null>(null);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainError, setExplainError] = useState(false);
+
+  const handleExplainToggle = async () => {
+    const next = !explainOpen;
+    setExplainOpen(next);
+    if (next && llmExplanation === null && !explainLoading && !explainError) {
+      setExplainLoading(true);
+      try {
+        const res = await fetch("/api/explain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ business_id: restaurant.business_id, query: query ?? "" }),
+        });
+        const json = await res.json();
+        if (json.explanation) {
+          setLlmExplanation(json.explanation);
+        } else {
+          setExplainError(true);
+        }
+      } catch {
+        setExplainError(true);
+      } finally {
+        setExplainLoading(false);
+      }
+    }
+  };
+
   const categoriesList = Array.isArray(restaurant.categories)
     ? restaurant.categories
     : typeof restaurant.categories === "string"
@@ -130,7 +162,6 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
           {restaurant.matchExplanation}
         </p>
       )}
-
       {/* Metadata Row with Icons */}
       <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
         {ratingValue !== undefined && (
@@ -178,6 +209,33 @@ export function RestaurantCard({ restaurant }: RestaurantCardProps) {
           });
         })()}
       </div>
+
+      {/* Why this result? */}
+      {/* Debugged with limited help from GenAI. */}
+      {query && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <button
+            onClick={handleExplainToggle}
+            className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors"
+          >
+            <Sparkles className="size-3.5" />
+            <span>Why this result?</span>
+            {explainOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </button>
+
+          {explainOpen && (
+            <div className="mt-2 px-3 py-2.5 bg-red-50 border border-red-100 rounded-xl text-sm text-gray-700 leading-relaxed">
+              {explainLoading && (
+                <span className="text-gray-400 italic">Generating explanation…</span>
+              )}
+              {!explainLoading && llmExplanation && llmExplanation}
+              {!explainLoading && explainError && (
+                <span className="text-gray-400 italic">Unable to generate explanation.</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
