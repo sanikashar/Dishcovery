@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { SearchBar } from "../components/SearchBar";
 import { RestaurantCard, type Restaurant } from "../components/RestaurantCard";
-import { UtensilsCrossed, Pizza, Coffee, IceCream, Cake, Cookie, Croissant, Sandwich, Cherry, Sparkles } from "lucide-react";
+import { UtensilsCrossed, Pizza, Coffee, IceCream, Cake, Cookie, Croissant, Sandwich, Cherry } from "lucide-react";
 import dishcoveryLogo from "../assets/logo.png";
 import { getQueryAwareTags } from "../utils/matchExplanation";
 
@@ -68,7 +68,6 @@ export function ResultsPage() {
   const [querySignals, setQuerySignals] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [useLlm, setUseLlm] = useState(false);
-  const [synthesis, setSynthesis] = useState<string | null>(null);
   const [transformedQuery, setTransformedQuery] = useState<string | null>(null);
 
   // Fetch LLM config once on mount
@@ -100,7 +99,6 @@ export function ResultsPage() {
     if (!trimmedQuery || !hasCity) {
       setResults([]);
       setQuerySignals([]);
-      setSynthesis(null);
       setTransformedQuery(null);
       setLoading(false);
       return;
@@ -108,7 +106,6 @@ export function ResultsPage() {
 
     const fetchResults = async () => {
       setLoading(true);
-      setSynthesis(null);
       setTransformedQuery(null);
       try {
         const combinedQuery = `${cityParam} ${trimmedQuery}`.trim();
@@ -119,7 +116,6 @@ export function ResultsPage() {
 
         const nextQuerySignals: string[] = extractDimensionLabels(data?.query_latent_dimensions?.top_dimensions, 3);
         setQuerySignals(nextQuerySignals);
-        setSynthesis(data.synthesis ?? null);
         setTransformedQuery(data.transformed_query ?? null);
 
         const enriched = list.map((restaurant) => {
@@ -145,7 +141,6 @@ export function ResultsPage() {
       } catch {
         setResults([]);
         setQuerySignals([]);
-        setSynthesis(null);
         setTransformedQuery(null);
       } finally {
         setLoading(false);
@@ -225,9 +220,7 @@ export function ResultsPage() {
               onSubmit={handleSearchSubmit}
               placeholder="Search for restaurants, cuisines, or vibes..."
             />
-            {transformedQuery && (
-              <p className="mt-2 text-xs text-gray-400">Searching for "{transformedQuery}"</p>
-            )}
+
           </div>
         </div>
       </div>
@@ -247,29 +240,12 @@ export function ResultsPage() {
               </h2>
             </div>
 
-            {/* RAG synthesis panel */}
-            {(loading && useLlm) || (!loading && (synthesis || transformedQuery)) ? (
-              <div className="mb-6 bg-white rounded-2xl p-5 shadow-sm border border-purple-100">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="size-4 text-purple-500" />
-                  <span className="text-sm text-purple-700">LLM Response</span>
-                </div>
-                {loading ? (
-                  <p className="text-sm text-purple-400 italic animate-pulse">Synthesizing...</p>
-                ) : (
-                  <>
-                    {transformedQuery && (
-                      <p className="text-xs text-gray-400 mb-2">
-                        Query used: <span className="italic text-gray-500">{transformedQuery}</span>
-                      </p>
-                    )}
-                    {synthesis && (
-                      <p className="text-sm text-gray-700 leading-relaxed">{synthesis}</p>
-                    )}
-                  </>
-                )}
-              </div>
-            ) : null}
+            {/* Transformed query hint */}
+            {!loading && transformedQuery && (
+              <p className="text-xs text-gray-400 mb-4">
+                Searching for: <span className="italic text-gray-500">{transformedQuery}</span>
+              </p>
+            )}
 
             {loading ? (
                 <div className="text-center py-12">
