@@ -1,6 +1,13 @@
 import { ChevronDown, ChevronUp, Clock, DollarSign, MapPin, Sparkles, Star, UtensilsCrossed } from "lucide-react";
 import { useState } from "react";
 
+export interface DimensionSignal {
+  dim_index: number;
+  dimension_label: string;
+  contribution?: number;
+  display_label?: string;
+}
+
 export interface Restaurant {
   business_id: string;
   name: string;
@@ -17,13 +24,15 @@ export interface Restaurant {
   priceTier?: number | null;
   ambience?: string[];
   hours?: Record<string, string> | null;
-  matchExplanation?: string;
   relevantTags?: string[];
+  svd_positive_dimensions?: DimensionSignal[];
+  svd_negative_dimensions?: DimensionSignal[];
 }
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
   query?: string;
+  querySignals?: string[];
 }
 
 const GENERIC_CATEGORIES = new Set([
@@ -44,7 +53,7 @@ const GENERIC_CATEGORIES = new Set([
   "Hotels & Travel",
 ]);
 
-export function RestaurantCard({ restaurant, query }: RestaurantCardProps) {
+export function RestaurantCard({ restaurant, query, querySignals = [] }: RestaurantCardProps) {
   const [explainOpen, setExplainOpen] = useState(false);
   const [llmExplanation, setLlmExplanation] = useState<string | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
@@ -138,6 +147,12 @@ export function RestaurantCard({ restaurant, query }: RestaurantCardProps) {
       : restaurant.address?.trim();
   const location = street ? `${street}, ${restaurant.city}` : restaurant.city;
 
+  const effectiveQuerySignals = querySignals;
+  const positiveSignals = restaurant.svd_positive_dimensions ?? [];
+  const negativeSignals = restaurant.svd_negative_dimensions ?? [];
+  const prettySignal = (label: string): string => label.replace(/\s*\/\s*/g, " / ").trim();
+  const showSignal = (signal: DimensionSignal): string => signal.display_label ?? signal.dimension_label;
+
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200">
       {/* Header: Restaurant Name + Match Score */}
@@ -156,12 +171,6 @@ export function RestaurantCard({ restaurant, query }: RestaurantCardProps) {
         <span>{location}</span>
       </div>
 
-      {/* Match Explanation */}
-      {restaurant.matchExplanation && (
-        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-          {restaurant.matchExplanation}
-        </p>
-      )}
       {/* Metadata Row with Icons */}
       <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
         {ratingValue !== undefined && (
@@ -224,13 +233,74 @@ export function RestaurantCard({ restaurant, query }: RestaurantCardProps) {
           </button>
 
           {explainOpen && (
-            <div className="mt-2 px-3 py-2.5 bg-red-50 border border-red-100 rounded-xl text-sm text-gray-700 leading-relaxed">
-              {explainLoading && (
-                <span className="text-gray-400 italic">Generating explanation…</span>
-              )}
-              {!explainLoading && llmExplanation && llmExplanation}
-              {!explainLoading && explainError && (
-                <span className="text-gray-400 italic">Unable to generate explanation.</span>
+            <div className="mt-3 space-y-4">
+              <div className="px-3 py-2.5 bg-red-50 border border-red-100 rounded-xl text-sm text-gray-700 leading-relaxed">
+                {explainLoading && (
+                  <span className="text-gray-400 italic">Generating explanation…</span>
+                )}
+                {!explainLoading && llmExplanation && llmExplanation}
+                {!explainLoading && explainError && (
+                  <span className="text-gray-400 italic">Unable to generate explanation.</span>
+                )}
+              </div>
+
+              {(effectiveQuerySignals.length > 0 || positiveSignals.length > 0 || negativeSignals.length > 0) && (
+                <div className="space-y-4">
+                  <p className="text-xs text-gray-500">
+                    These are the top SVD themes learned from the reviews that influenced the match score for this restaurant. 
+                  </p>
+
+                  {effectiveQuerySignals.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2">Query Dimensions:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {effectiveQuerySignals.slice(0, 3).map((sig, index) => (
+                          <span
+                            key={`${sig}-${index}`}
+                            className="px-3 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-sm"
+                            title={sig}
+                          >
+                            {prettySignal(sig)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {positiveSignals.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2">Positive Dimensions:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {positiveSignals.slice(0, 3).map((d) => (
+                          <span
+                            key={d.dim_index}
+                            className="px-3 py-1 bg-pink-50 text-pink-700 border border-pink-200 rounded-full text-sm"
+                            title={showSignal(d)}
+                          >
+                            {prettySignal(showSignal(d))}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {negativeSignals.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-700 mb-2">Negative Dimensions:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {negativeSignals.slice(0, 3).map((d) => (
+                          <span
+                            key={d.dim_index}
+                            className="px-3 py-1 bg-yellow-50 text-orange-700 border border-orange-300 rounded-full text-sm"
+                            title={showSignal(d)}
+                          >
+                            {prettySignal(showSignal(d))}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

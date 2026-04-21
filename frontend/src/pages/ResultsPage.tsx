@@ -40,6 +40,14 @@ const restaurantMatchesFilters = (restaurant: Restaurant, minRating: number, pri
   return tier <= targetTier;
 };
 
+const extractDimensionLabels = (value: unknown, max = 3): string[] => {
+  if (!Array.isArray(value)) return [];
+  const labels = value
+    .map((d: any) => d?.display_label ?? d?.dimension_label)
+    .filter((label: unknown): label is string => typeof label === "string" && label.trim().length > 0);
+  return [...new Set(labels)].slice(0, max);
+};
+
 export function ResultsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -57,6 +65,7 @@ export function ResultsPage() {
   const [activeRating, setActiveRating] = useState(initialRating);
   const [activePrice, setActivePrice] = useState(initialPrice);
   const [results, setResults] = useState<Restaurant[]>([]);
+  const [querySignals, setQuerySignals] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Update search query when URL changes
@@ -79,6 +88,7 @@ export function ResultsPage() {
 
     if (!trimmedQuery || !hasCity) {
       setResults([]);
+      setQuerySignals([]);
       setLoading(false);
       return;
     }
@@ -90,6 +100,9 @@ export function ResultsPage() {
         const response = await fetch(`/api/search?q=${encodeURIComponent(combinedQuery)}`);
         const data = await response.json();
         const list: Restaurant[] = data.results || [];
+
+        const nextQuerySignals: string[] = extractDimensionLabels(data?.query_latent_dimensions?.top_dimensions, 3);
+        setQuerySignals(nextQuerySignals);
 
         const enriched = list.map((restaurant) => {
           const categoriesList = Array.isArray(restaurant.categories)
@@ -113,6 +126,7 @@ export function ResultsPage() {
         setResults(filtered);
       } catch {
         setResults([]);
+        setQuerySignals([]);
       } finally {
         setLoading(false);
       }
@@ -217,7 +231,7 @@ export function ResultsPage() {
               ) : results.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                   {results.map((restaurant) => (
-                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} />
+                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} querySignals={querySignals} />
                   ))}
                 </div>
               ) : (

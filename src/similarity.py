@@ -32,7 +32,6 @@ For word2vec and bert, we compute *separate* cosine scores for:
 Then we combine them with configurable weights that default to
 prioritising ambience
 '''
-##SAVING AND LOADING PROCESSED DATA#####################################################################################
 BERT_CACHE_DIR = os.path.dirname(__file__)
 
 
@@ -53,7 +52,7 @@ def _save_bert_corpus(corpus: dict, cache_key: str):
     """Save BERT corpus to disk, excluding the model itself (too large)."""
     saveable = {
         "model_type":    corpus["model_type"],
-        "field_vectors": corpus["field_vectors"],  # numpy arrays
+        "field_vectors": corpus["field_vectors"], 
         "field_weights": corpus["field_weights"],
         "restaurants":   corpus["restaurants"],
     }
@@ -71,13 +70,12 @@ def _load_bert_corpus(cache_key: str) -> dict | None:
     print(f"[similarity] Loading cached BERT corpus from {cache_path}...")
     with open(cache_path, "rb") as f:
         corpus = pickle.load(f)
-    # Still need to load the model for query-time encoding
     from sentence_transformers import SentenceTransformer
     corpus["bert_model"] = SentenceTransformer("all-MiniLM-L6-v2")
     print("[similarity] BERT corpus loaded from cache ✓")
     return corpus
 
-##HELPERS#####################################################################################
+##HELPERS##
  
 def parse_ambience(attributes: dict) -> dict:
     raw = attributes.get("Ambience", {})
@@ -102,13 +100,12 @@ def practical_text(attributes: dict) -> str:
     if not attributes:
         return ""
     tokens = []
-    #price tags, e.g. "cheap cheap" for price 1, "expensive expensive" for price 4
     price = attributes.get("RestaurantsPriceRange2")
     if price:
         try:
             p = int(str(price).strip())
-            tokens += ["cheap"] * max(0, 3 - p)          # price 1 → "cheap cheap"
-            tokens += ["expensive"] * max(0, p - 2)      # price 4 → "expensive expensive"
+            tokens += ["cheap"] * max(0, 3 - p)    
+            tokens += ["expensive"] * max(0, p - 2)   
         except ValueError:
             pass
         
@@ -131,7 +128,7 @@ def practical_text(attributes: dict) -> str:
     if isinstance(good_for, dict):
         for meal, flag in good_for.items():
             if flag is True:
-                tokens.append(meal)   # "lunch", "dinner", "breakfast"
+                tokens.append(meal)   
                 
     #takeout/delivery tags            
     if str(attributes.get("RestaurantsTakeOut", "")).lower() == "true":
@@ -163,7 +160,7 @@ def extract_fields(restaurant: dict) -> dict:
         "practical": practical_text(attrs),
     }
 
-##CORPUS BUILDING#####################################################################################
+##CORPUS BUILDING##
 
 DEFAULT_FIELD_WEIGHTS = {
     "ambience":  0.35,
@@ -549,6 +546,238 @@ def explain_svd_result(
         "query_coords":      query_vec.tolist(),
         "restaurant_coords": rest_vec.tolist(),
         "top_dimensions":    top_dimensions,
+    }
+
+
+def _ensure_svd_biz_index(corpus: dict) -> dict:
+    idx = corpus.get("_svd_biz_id_to_index")
+    if isinstance(idx, dict):
+        return idx
+
+    restaurants = corpus.get("restaurants") or []
+    idx = {}
+    for i, r in enumerate(restaurants):
+        biz = r.get("business", {})
+        biz_id = biz.get("business_id")
+        if biz_id:
+            idx[biz_id] = i
+    corpus["_svd_biz_id_to_index"] = idx
+    return idx
+
+
+def _svd_dimension_descriptor(corpus: dict, dim_idx: int, top_n_terms: int = 8) -> dict:
+    cache = corpus.setdefault("_svd_dim_cache", {})
+    key = (int(dim_idx), int(top_n_terms))
+    if key in cache:
+        return cache[key]
+
+    svd = corpus["svd"]
+    vectorizer = corpus["vectorizer"]
+    Vt = svd.components_
+    terms = vectorizer.get_feature_names_out()
+
+    loadings = Vt[dim_idx]
+    pos_terms = [terms[i] for i in np.argsort(loadings)[::-1][:top_n_terms]]
+    neg_terms = [terms[i] for i in np.argsort(loadings)[:top_n_terms]]
+
+    desc = {
+        "dim_index": int(dim_idx),
+        "dimension_label": " / ".join(pos_terms[:3]),
+        "top_positive_terms": pos_terms,
+        "top_negative_terms": neg_terms,
+    }
+    cache[key] = desc
+    return desc
+
+
+_GENERIC_THEME_TERMS = {
+    "food",
+    "foods",
+    "good",
+    "great",
+    "best",
+    "nice",
+    "new",
+    "old",
+    "place",
+    "places",
+    "restaurant",
+    "restaurants",
+    "service",
+    "menu",
+    "order",
+    "ordered",
+    "love",
+    "loved",
+    "like",
+    "staff",
+    "really",
+    "definitely",
+    "also",
+    "one",
+    "two",
+    "time",
+}
+
+
+def _is_generic_theme_term(term: str) -> bool:
+    t = (term or "").lower().strip()
+    if not t:
+        return True
+    # Handle ngrams like "coffee shop", only treat as generic if every token is generic.
+    tokens = re.split(r"[^a-z0-9]+", t)
+    tokens = [tok for tok in tokens if tok]
+    if not tokens:
+        return True
+    return all(tok in _GENERIC_THEME_TERMS for tok in tokens)
+
+
+def _dimension_side_terms(desc: dict, side: int) -> list[str]:
+    if side >= 0:
+        return list(desc.get("top_positive_terms") or [])
+    return list(desc.get("top_negative_terms") or [])
+
+
+def _dimension_display_terms(desc: dict, side: int, max_terms: int = 8) -> list[str]:
+    raw = _dimension_side_terms(desc, side)[:max_terms]
+    filtered = [t for t in raw if not _is_generic_theme_term(t)]
+    return filtered if filtered else raw
+
+
+def _dimension_display_label(desc: dict, side: int, n_terms: int = 3) -> str:
+    terms = _dimension_display_terms(desc, side)
+    picked = [t for t in terms if t][:n_terms]
+    return " / ".join(picked) if picked else (desc.get("dimension_label") or "")
+
+
+def prepare_query_tfidf_svd(query: str, corpus: dict) -> dict:
+    """
+    Precompute corrected query text and its SVD coordinates once per request.
+    """
+    assert corpus["model_type"] in ("tfidf+svd", "svd"), \
+        "prepare_query_tfidf_svd() requires a tfidf+svd corpus"
+
+    corrected_query = _correct_query(query, corpus["vectorizer"])
+    query_vec = vectorize_query_tfidf_svd(corrected_query, corpus)
+    return {
+        "corrected_query": corrected_query,
+        "query_vec": query_vec,
+    }
+
+
+def get_query_latent_dimensions(
+    prepared_query: dict,
+    corpus: dict,
+    top_n_dims: int = 5,
+    top_n_terms: int = 8,
+) -> dict:
+    """
+    Returns the top latent dimensions activated by a query, reusing a
+    precomputed query vector.
+    """
+    assert corpus["model_type"] in ("tfidf+svd", "svd"), \
+        "get_query_latent_dimensions() requires a tfidf+svd corpus"
+
+    corrected_query = prepared_query["corrected_query"]
+    query_vec = prepared_query["query_vec"]
+    sorted_dim_indices = [int(i) for i in np.argsort(np.abs(query_vec))[::-1]]
+
+    dims = []
+    for dim_idx in sorted_dim_indices:
+        if len(dims) >= top_n_dims:
+            break
+        activation = float(query_vec[dim_idx])
+        side = 1 if activation >= 0 else -1
+        desc = _svd_dimension_descriptor(corpus, dim_idx, top_n_terms=top_n_terms)
+        display_terms = _dimension_display_terms(desc, side)
+        # Filter out dimensions that are too generic/noisy after filtering.
+        if not any(not _is_generic_theme_term(t) for t in display_terms[:3]):
+            continue
+
+        dims.append({
+            **desc,
+            "query_activation": round(activation, 4),
+            "display_side": "positive" if side >= 0 else "negative",
+            "display_terms": display_terms[:top_n_terms],
+            "display_label": _dimension_display_label(desc, side, n_terms=3),
+        })
+
+    return {
+        "corrected_query": corrected_query,
+        "top_dimensions": dims,
+    }
+def get_result_latent_dimensions(
+    prepared_query: dict,
+    business_id: str,
+    corpus: dict,
+    top_n_pos: int = 3,
+    top_n_neg: int = 3,
+    top_n_terms: int = 8,
+) -> dict:
+    """
+    Returns the top positive and negative latent dimensions for a specific
+    (query, restaurant) pair, reusing a precomputed query vector.
+    """
+    assert corpus["model_type"] in ("tfidf+svd", "svd"), \
+        "get_result_latent_dimensions() requires a tfidf+svd corpus"
+
+    corrected_query = prepared_query["corrected_query"]
+    query_vec = prepared_query["query_vec"]
+
+    rest_idx = _ensure_svd_biz_index(corpus).get(business_id)
+    if rest_idx is None:
+        return {"error": "Restaurant not found in corpus"}
+
+    rest_vec = corpus["doc_vectors"][rest_idx]
+
+    contributions = query_vec * rest_vec
+    q_norm = np.linalg.norm(query_vec)
+    r_norm = np.linalg.norm(rest_vec)
+    norm_contributions = contributions / (q_norm * r_norm) if q_norm > 0 and r_norm > 0 else contributions
+
+    sorted_pos = [int(i) for i in np.argsort(norm_contributions)[::-1] if norm_contributions[int(i)] > 0]
+    sorted_neg = [int(i) for i in np.argsort(norm_contributions) if norm_contributions[int(i)] < 0]
+
+    def build_dim(dim_idx: int, display_side: int) -> dict:
+        desc = _svd_dimension_descriptor(corpus, dim_idx, top_n_terms=top_n_terms)
+        return {
+            **desc,
+            "query_activation": round(float(query_vec[dim_idx]), 4),
+            "restaurant_activation": round(float(rest_vec[dim_idx]), 4),
+            "contribution": round(float(norm_contributions[dim_idx]), 4),
+            "display_side": "positive" if display_side >= 0 else "negative",
+            "display_terms": _dimension_display_terms(desc, display_side)[:top_n_terms],
+            "display_label": _dimension_display_label(desc, display_side, n_terms=3),
+        }
+
+    positive_dimensions = []
+    for dim_idx in sorted_pos:
+        if len(positive_dimensions) >= top_n_pos:
+            break
+        side = 1 if float(query_vec[dim_idx]) >= 0 else -1
+        desc = _svd_dimension_descriptor(corpus, dim_idx, top_n_terms=top_n_terms)
+        display_terms = _dimension_display_terms(desc, side)
+        if not any(not _is_generic_theme_term(t) for t in display_terms[:3]):
+            continue
+        positive_dimensions.append(build_dim(dim_idx, side))
+
+    negative_dimensions = []
+    for dim_idx in sorted_neg:
+        if len(negative_dimensions) >= top_n_neg:
+            break
+        # For mismatches, show the restaurant's side (what the restaurant leans toward).
+        side = 1 if float(rest_vec[dim_idx]) >= 0 else -1
+        desc = _svd_dimension_descriptor(corpus, dim_idx, top_n_terms=top_n_terms)
+        display_terms = _dimension_display_terms(desc, side)
+        if not any(not _is_generic_theme_term(t) for t in display_terms[:3]):
+            continue
+        negative_dimensions.append(build_dim(dim_idx, side))
+
+    return {
+        "corrected_query": corrected_query,
+        "overall_score": round(float(norm_contributions.sum()), 4),
+        "positive_dimensions": positive_dimensions,
+        "negative_dimensions": negative_dimensions,
     }
 
 
