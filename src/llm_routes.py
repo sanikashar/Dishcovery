@@ -97,6 +97,111 @@ def register_chat_route(app, json_search):
         )
 
 
+def register_rag_search_route(app):
+    """Register full RAG pipeline:
+       Step 1: LLM rewrites query for IR.
+       Step 2: Run IR retrieval on transformed query.
+       Step 3: LLM synthesizes an answer from the original query + IR results.
+    """
+    from search import restaurant_search
+
+    @app.route("/api/rag-search")
+    def rag_search():
+        original_query = request.args.get("q", "").strip()
+        if not original_query:
+            return jsonify({"error": "Query is required", "results": [], "synthesis": None, "transformed_query": None})
+
+        api_key = os.getenv("SPARK_API_KEY")
+        if not api_key:
+            ir_result = restaurant_search(original_query)
+            ir_result["transformed_query"] = None
+            ir_result["synthesis"] = None
+            return jsonify(ir_result)
+
+        client = LLMClient(api_key=api_key)
+
+        # Query transformation
+        transformed_query = original_query
+        try:
+            transform_messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a search query optimizer for a restaurant recommendation system. "
+                        "Rewrite the user's query to extract key searchable terms: cuisine type, ambience/vibe words, "
+                        "dining occasion, and food preferences. Keep any city name present in the query. "
+                        "Remove filler words like 'I want', 'looking for', 'find me'. "
+                        "Output ONLY the improved search query as a short phrase, nothing else."
+                    ),
+                },
+                {"role": "user", "content": original_query},
+            ]
+            response = client.chat(transform_messages)
+            transformed = (response.get("content") or "").strip()
+            if transformed:
+                transformed_query = transformed
+        except Exception as e:
+            logger.warning(f"Query transform failed, using original: {e}")
+
+        # IR retrieval with transformed query
+        ir_result = restaurant_search(transformed_query)
+        results = ir_result.get("results", [])
+
+        # LLM synthesis over top IR results
+        synthesis = None
+        if results:
+            try:
+                top_results = results[:5]
+                context_lines = []
+                for r in top_results:
+                    name = r.get("name", "Unknown")
+                    categories = r.get("categories", "")
+                    stars = r.get("stars", r.get("rating", "N/A"))
+                    price = r.get("priceRange", "")
+                    ambience = ", ".join(r.get("ambience", [])) if r.get("ambience") else "not specified"
+                    score = r.get("matchScore", 0)
+                    context_lines.append(
+                        f"- {name} ({categories}): {stars}/5 stars, {price}, ambience: {ambience}, match: {round(score * 100)}%"
+                    )
+                context_text = "\n".join(context_lines)
+
+                synthesis_messages = [
+                    # prompt developed with the help of GenAI
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a knowledgeable friend helping someone find a great restaurant. "
+                            "Respond directly to the person's request in a natural tone, like you're texting a recommendation, not writing a report. "
+                            "The rankings should match current rankings. Say why it fits, and mention the other rankings if they add something different. "
+                            "Use the restaurant names and specific details (cuisine, vibe, price, rating) to back up your picks. "
+                            "Do not start with 'Based on your query' or 'The results show', just answer as if you know the area. "
+                            "Keep it to 4-5 sentences max, less is fine."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"\"{original_query}\"\n\n"
+                            f"Here are the top matches:\n{context_text}\n\n"
+                            "What would you recommend?"
+                        ),
+                    },
+                ]
+                syn_response = client.chat(synthesis_messages)
+                synthesis = (syn_response.get("content") or "").strip() or None
+            except Exception as e:
+                logger.warning(f"LLM synthesis failed: {e}")
+
+        shown_transformed = transformed_query if transformed_query != original_query else None
+        return jsonify({
+            "error": ir_result.get("error"),
+            "results": results,
+            "query_latent_dimensions": ir_result.get("query_latent_dimensions"),
+            "transformed_query": shown_transformed,
+            "synthesis": synthesis,
+        })
+
+
 # Debugged with limited help of GenAI, fixing prompt errors
 def register_explain_route(app):
     """Register POST /api/explain — on-demand LLM justification for a single restaurant result."""
@@ -148,7 +253,7 @@ def register_explain_route(app):
         stars = business.get("stars", "N/A")
 
         # Truncate reviews to keep prompt compact
-        reviews_snippet = reviews_text[:400] if reviews_text else "No reviews available."
+        reviews_snippet = reviews_text[:900] if reviews_text else "No reviews available."
 
         system_prompt = (
             "You are a restaurant recommendation assistant. "
