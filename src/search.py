@@ -11,6 +11,9 @@ from similarity import (
     explain_svd_result,
     describe_svd_dimensions,
     DEFAULT_FIELD_WEIGHTS,
+    prepare_query_tfidf_svd,
+    get_query_latent_dimensions,
+    get_result_latent_dimensions,
 )
 
 from errors import (
@@ -145,4 +148,36 @@ def restaurant_search(query):
     if not top_results:
         return {"error": NO_MATCHING_RESTAURANTS, "results": []}
 
-    return {"error": None, "results": top_results}
+    response = {"error": None, "results": top_results}
+
+    # Add SVD explainability payloads when using tfidf+svd search.
+    if corpus.get("model_type") in ("tfidf+svd", "svd"):
+        try:
+            prepared = prepare_query_tfidf_svd(scoring_query, corpus)
+            response["query_latent_dimensions"] = get_query_latent_dimensions(
+                prepared,
+                corpus,
+                top_n_dims=5,
+                top_n_terms=8,
+            )
+            for r in response["results"]:
+                biz_id = r.get("business_id")
+                if not biz_id:
+                    continue
+                dims = get_result_latent_dimensions(
+                    prepared,
+                    biz_id,
+                    corpus,
+                    top_n_pos=3,
+                    top_n_neg=3,
+                    top_n_terms=8,
+                )
+                if isinstance(dims, dict) and dims.get("error"):
+                    continue
+                r["svd_positive_dimensions"] = dims.get("positive_dimensions", [])
+                r["svd_negative_dimensions"] = dims.get("negative_dimensions", [])
+        except Exception:
+            # Explainability is best-effort; search results should still load.
+            pass
+
+    return response

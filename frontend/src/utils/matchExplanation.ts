@@ -227,6 +227,66 @@ const keywordMap: Record<string, string[]> = {
   lively:        ["trendy", "Bars"],
 };
 
+const keywordLabel: Record<string, string> = {
+  cozy: "cozy vibes",
+  romantic: "romantic vibes",
+  trendy: "trendy vibes",
+  fancy: "upscale vibes",
+  upscale: "upscale vibes",
+  classy: "upscale vibes",
+};
+
+const normalize = (value: string): string =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const tagOverlapsAny = (tag: string, candidates: string[]): boolean => {
+  const t = normalize(tag);
+  return candidates.some((c) => t.includes(normalize(c)) || normalize(c).includes(t));
+};
+
+/**
+ * Generates a short, user-facing explanation sentence for why a restaurant
+ * matches the query. Kept intentionally lightweight (frontend-only).
+ */
+export function generateMatchExplanation(
+  restaurantName: string,
+  tags: string[],
+  query: string,
+  rating: number,
+  price: string | undefined,
+  score: number,
+  ratingThreshold?: number,
+): string {
+  void restaurantName;
+  void rating;
+  void price;
+  void score;
+  void ratingThreshold;
+
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const matched: string[] = [];
+
+  for (const word of words) {
+    const mapped = keywordMap[word];
+    if (!mapped) continue;
+    if (tags.some((t) => tagOverlapsAny(t, mapped))) matched.push(word);
+  }
+
+  const unique = [...new Set(matched)];
+  if (unique.length === 0) {
+    const topTags = tags.filter(Boolean).slice(0, 2).join(" and ");
+    return topTags ? `Known for ${topTags}.` : "A strong match.";
+  }
+  if (unique.length === 1) {
+    const label = keywordLabel[unique[0]] ?? unique[0];
+    return `Matches your search for ${label}.`;
+  }
+
+  const labelA = keywordLabel[unique[0]] ?? unique[0];
+  const labelB = keywordLabel[unique[1]] ?? unique[1];
+  return `Matches your search for ${labelA} and ${labelB}.`;
+}
+
 /**
  * Returns subset of a tags that are directly relevant to the
  * query, used to highlight tag pills on the result card.
