@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronUp, Clock, DollarSign, MapPin, Sparkles, Star, UtensilsCrossed } from "lucide-react";
+import { ChevronDown, ChevronUp, Clock, DollarSign, Info, MapPin, Sparkles, Star, UtensilsCrossed } from "lucide-react";
 import { useState } from "react";
+import { Tooltip } from "./Tooltip";
 
 export interface DimensionSignal {
   dim_index: number;
@@ -101,6 +102,7 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
     (cat) => !GENERIC_CATEGORIES.has(cat) && cat !== primaryCuisine,
   );
   const derivedTags = [...new Set([...ambienceTags, ...categoryTags])];
+  const ambienceSet = new Set(ambienceTags.map((t) => t.toLowerCase()));
 
   const relevantSet = new Set(
     (restaurant.relevantTags ?? []).map((t) => t.toLowerCase()),
@@ -152,6 +154,10 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
   const negativeSignals = restaurant.svd_negative_dimensions ?? [];
   const prettySignal = (label: string): string => label.replace(/\s*\/\s*/g, " / ").trim();
   const showSignal = (signal: DimensionSignal): string => signal.display_label ?? signal.dimension_label;
+  const scoreTooltip =
+    "Match score is computed with cosine similarity between your query and each restaurant after TF‑IDF + SVD. Higher % means more similar to your search.";
+  const tagsTooltip =
+    "These tags come from restaurant categories and ambience attributes. Colored tags are highlighted because they closely match your search terms; grey tags are still true but less relevant to what you typed.";
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200">
@@ -159,8 +165,17 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
       <div className="flex justify-between items-start mb-3">
         <h3 className="text-xl text-gray-900">{restaurant.name}</h3>
         {restaurant.matchScore !== undefined && (
-          <div className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-sm">
-            {Math.round(restaurant.matchScore * 100)}% match
+          <div className="flex items-center gap-1.5 bg-red-50 text-red-600 px-3 py-1 rounded-full text-sm">
+            <span>{Math.round(restaurant.matchScore * 100)}% match</span>
+            <Tooltip content={scoreTooltip}>
+              <button
+                type="button"
+                className="inline-flex items-center rounded focus:outline-none focus:ring-2 focus:ring-red-200"
+                aria-label="How match score is calculated"
+              >
+                <Info className="size-3.5 text-red-400" />
+              </button>
+            </Tooltip>
           </div>
         )}
       </div>
@@ -200,6 +215,18 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
       </div>
 
       {/* Tags / Pills */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-sm text-gray-600">Tags</span>
+        <Tooltip content={tagsTooltip}>
+          <button
+            type="button"
+            className="inline-flex items-center rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+            aria-label="What tags mean"
+          >
+            <Info className="size-3.5 text-gray-400" />
+          </button>
+        </Tooltip>
+      </div>
       <div className="flex flex-wrap gap-2">
         {(() => {
           const coloredStyles = [
