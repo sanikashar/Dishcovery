@@ -67,6 +67,15 @@ export function ResultsPage() {
   const [results, setResults] = useState<Restaurant[]>([]);
   const [querySignals, setQuerySignals] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [useLlm, setUseLlm] = useState(false);
+
+  // Fetch LLM config once on mount
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data) => setUseLlm(!!data.use_llm))
+      .catch(() => {});
+  }, []);
 
   // Update search query when URL changes
   useEffect(() => {
@@ -97,7 +106,8 @@ export function ResultsPage() {
       setLoading(true);
       try {
         const combinedQuery = `${cityParam} ${trimmedQuery}`.trim();
-        const response = await fetch(`/api/search?q=${encodeURIComponent(combinedQuery)}`);
+        const endpoint = useLlm ? "/api/rag-search" : "/api/search";
+        const response = await fetch(`${endpoint}?q=${encodeURIComponent(combinedQuery)}`);
         const data = await response.json();
         const list: Restaurant[] = data.results || [];
 
@@ -133,7 +143,7 @@ export function ResultsPage() {
     };
 
     fetchResults();
-  }, [searchParams]);
+  }, [searchParams, useLlm]);
 
   const handleInputChange = (value: string) => {
     setSearchInput(value);
@@ -205,6 +215,7 @@ export function ResultsPage() {
               onSubmit={handleSearchSubmit}
               placeholder="Search for restaurants, cuisines, or vibes..."
             />
+
           </div>
         </div>
       </div>
@@ -223,6 +234,7 @@ export function ResultsPage() {
                     : `Showing ${results.length} restaurants`}
               </h2>
             </div>
+
 
             {loading ? (
                 <div className="text-center py-12">

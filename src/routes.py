@@ -10,8 +10,8 @@ from models import db, Episode, Review
 from search import restaurant_search
 
 # ── AI toggle ────────────────────────────────────────────────────────────────
-USE_LLM = False
-# USE_LLM = True
+# USE_LLM = False
+USE_LLM = True
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -56,8 +56,9 @@ def register_routes(app):
         text = request.args.get("q", "")
         return jsonify(restaurant_search(text))
 
-    from llm_routes import register_explain_route
+    from llm_routes import register_explain_route, register_rag_search_route
     register_explain_route(app)
+    register_rag_search_route(app)
 
     if USE_LLM:
         from llm_routes import register_chat_route
