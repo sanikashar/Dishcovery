@@ -68,7 +68,6 @@ export function ResultsPage() {
   const [querySignals, setQuerySignals] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [useLlm, setUseLlm] = useState(false);
-  const [transformedQuery, setTransformedQuery] = useState<string | null>(null);
 
   // Fetch LLM config once on mount
   useEffect(() => {
@@ -99,14 +98,12 @@ export function ResultsPage() {
     if (!trimmedQuery || !hasCity) {
       setResults([]);
       setQuerySignals([]);
-      setTransformedQuery(null);
       setLoading(false);
       return;
     }
 
     const fetchResults = async () => {
       setLoading(true);
-      setTransformedQuery(null);
       try {
         const combinedQuery = `${cityParam} ${trimmedQuery}`.trim();
         const endpoint = useLlm ? "/api/rag-search" : "/api/search";
@@ -116,7 +113,6 @@ export function ResultsPage() {
 
         const nextQuerySignals: string[] = extractDimensionLabels(data?.query_latent_dimensions?.top_dimensions, 3);
         setQuerySignals(nextQuerySignals);
-        setTransformedQuery(data.transformed_query ?? null);
 
         const enriched = list.map((restaurant) => {
           const categoriesList = Array.isArray(restaurant.categories)
@@ -141,7 +137,6 @@ export function ResultsPage() {
       } catch {
         setResults([]);
         setQuerySignals([]);
-        setTransformedQuery(null);
       } finally {
         setLoading(false);
       }
@@ -240,12 +235,6 @@ export function ResultsPage() {
               </h2>
             </div>
 
-            {/* Transformed query hint */}
-            {!loading && transformedQuery && (
-              <p className="text-xs text-gray-400 mb-4">
-                Searching for: <span className="italic text-gray-500">{transformedQuery}</span>
-              </p>
-            )}
 
             {loading ? (
                 <div className="text-center py-12">
