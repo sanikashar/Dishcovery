@@ -424,7 +424,7 @@ def _correct_query(query: str, vectorizer) -> str:
     """
     Replace words not in the TF-IDF vocabulary with their closest match.
     Words already in the vocabulary pass through unchanged.
-    Words with no close match (cutoff=0.6) are kept as-is.
+    Words with no close match (cutoff=0.75) are kept as-is.
     """
     vocab = list(vectorizer.vocabulary_.keys())
     corrected = []
