@@ -115,9 +115,9 @@ def query_time_check(query, business):
     times = [
         "breakfast", "morning", "early",
         "brunch",
-        "lunch", "afternoon",
+        "lunch", "afternoon", "noon", "midday",
         "dinner", "evening",
-        "late night", "night", "open late"
+        "late night", "late-night", "latenight", "night", "open late"
     ]
 
     if not any(word in q for word in times):
@@ -142,13 +142,13 @@ def query_time_check(query, business):
         if "brunch" in q:
             return open_hour <= 11 and close_hour >= 13
 
-        if "lunch" in q or "afternoon" in q:
+        if "lunch" in q or "afternoon" in q or "noon" in q or "midday" in q:
             return open_hour <= 12 and close_hour >= 15
 
         if "dinner" in q or "evening" in q:
             return close_hour >= 17
 
-        if "late night" in q or "open late" in q:
+        if "late night" in q or "late-night" in q or "latenight" in q or "open late" in q:
             return close_hour >= 22 or close_hour <= 3
 
         elif "night" in q:
