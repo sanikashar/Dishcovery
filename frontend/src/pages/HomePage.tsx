@@ -60,7 +60,7 @@ export function HomePage() {
           price={priceFilter}
           onPriceChange={setPriceFilter}
           onSubmit={handleSearchSubmit}
-          placeholder="Try 'casual brunch' or 'latenight pizza'..."
+          placeholder="Try 'casual brunch' or 'late night pizza'..."
         />
       </div>
     </div>
