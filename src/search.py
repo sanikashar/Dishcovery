@@ -109,6 +109,53 @@ def get_top_restaurants(ranked_results, k=10):
 
     return heapq.nlargest(k, best_by_name.values(), key=lambda x: x["matchScore"])
 
+def query_time_check(query, business):
+    q = query.lower()
+
+    times = [
+        "breakfast", "morning", "early",
+        "brunch",
+        "lunch", "afternoon",
+        "dinner", "evening",
+        "late night", "night", "open late"
+    ]
+
+    if not any(word in q for word in times):
+        return True
+
+    hours = business.get("hours") or {}
+
+    for _, hours_str in hours.items():
+        if not hours_str or "-" not in hours_str:
+            continue
+
+        open_str, close_str = hours_str.split("-", 1)
+        open_hour = int(open_str.split(":")[0])
+        close_hour = int(close_str.split(":")[0])
+
+        if open_hour == 0 and close_hour == 0:
+            continue
+
+        if "breakfast" in q or "morning" in q or "early" in q:
+            return open_hour <= 9
+
+        if "brunch" in q:
+            return open_hour <= 11 and close_hour >= 13
+
+        if "lunch" in q or "afternoon" in q:
+            return open_hour <= 12 and close_hour >= 15
+
+        if "dinner" in q or "evening" in q:
+            return close_hour >= 17
+
+        if "late night" in q or "open late" in q:
+            return close_hour >= 21 or close_hour <= 3
+
+        elif "night" in q:
+            return close_hour >= 20 or close_hour <= 2
+
+    return False
+
 
 def restaurant_search(query):
     if not query or not query.strip():
@@ -143,6 +190,11 @@ def restaurant_search(query):
 
     print(f"[search] Ranking restaurants for query: '{scoring_query}'...")
     ranked_results = rank_restaurants(scoring_query, corpus, type=SEARCH_SIMILARITY_MODEL)
+
+    ranked_results = [
+        r for r in ranked_results
+        if query_time_check(scoring_query, r["business"])
+    ]
 
     top_results = get_top_restaurants(ranked_results, k=10)
     if not top_results:
