@@ -149,7 +149,7 @@ def query_time_check(query, business):
             return close_hour >= 17
 
         if "late night" in q or "open late" in q:
-            return close_hour >= 21 or close_hour <= 3
+            return close_hour >= 22 or close_hour <= 3
 
         elif "night" in q:
             return close_hour >= 20 or close_hour <= 2
