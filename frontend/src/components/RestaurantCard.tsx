@@ -157,7 +157,13 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
   const scoreTooltip =
     "Match score is computed with cosine similarity between your query and each restaurant after TF‑IDF + SVD. Higher % means more similar to your search.";
   const tagsTooltip =
-    "These tags come from restaurant categories and ambience attributes. Colored tags are highlighted because they closely match your search terms; grey tags are still true but less relevant to what you typed.";
+    "These tags come from restaurant categories and ambience attributes. Colored tags are highlighted because they closely match your search terms. Grey tags are still true but less relevant to what you typed.";
+  const queryDimTooltip = 
+    "The main themes the model detected in your search. These are learned from review and category text, so labels can be broad or combine ideas.";
+  const posDimTooltip = 
+    "These themes increased this restaurant’s match score for your search."
+  const negDimTooltip = 
+    "These themes pulled this restaurant away from your search."
 
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200">
@@ -279,7 +285,18 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
 
                   {effectiveQuerySignals.length > 0 && (
                     <div>
-                      <p className="text-sm text-gray-700 mb-2">Query Dimensions:</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm text-gray-700">Query Dimensions:</p>
+                        <Tooltip content={queryDimTooltip} maxWidthClassName="max-w-[90vw] w-80">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                            aria-label="What Query Dimensions means"
+                          >
+                            <Info className="size-3.5 text-gray-400" />
+                          </button>
+                        </Tooltip>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {effectiveQuerySignals.slice(0, 3).map((sig, index) => (
                           <span
@@ -296,7 +313,18 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
 
                   {positiveSignals.length > 0 && (
                     <div>
-                      <p className="text-sm text-gray-700 mb-2">Positive Dimensions:</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm text-gray-700">Positive Dimensions:</p>
+                        <Tooltip content={posDimTooltip} maxWidthClassName="max-w-[90vw] w-80">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                            aria-label="What Positive Dimensions means"
+                          >
+                            <Info className="size-3.5 text-gray-400" />
+                          </button>
+                        </Tooltip>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {positiveSignals.slice(0, 3).map((d) => (
                           <span
@@ -313,7 +341,18 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
 
                   {negativeSignals.length > 0 && (
                     <div>
-                      <p className="text-sm text-gray-700 mb-2">Negative Dimensions:</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-sm text-gray-700">Negative Dimensions:</p>
+                        <Tooltip content={negDimTooltip} maxWidthClassName="max-w-[90vw] w-80">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded focus:outline-none focus:ring-2 focus:ring-gray-200"
+                            aria-label="What Negative Dimensions means"
+                          >
+                            <Info className="size-3.5 text-gray-400" />
+                          </button>
+                        </Tooltip>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {negativeSignals.slice(0, 3).map((d) => (
                           <span
