@@ -244,19 +244,29 @@ export function ResultsPage() {
             </div>
 
 
-            {(aiOverview || transformedQuery) && !loading && (
+            {useLlm && activeQuery && activeCity !== CITY_PLACEHOLDER && (
               <div className="mb-6 bg-white rounded-2xl p-5 border border-red-100 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles className="size-4 text-red-500" />
                   <span className="text-sm font-medium text-red-600">AI Overview</span>
                 </div>
-                {aiOverview && (
-                  <p className="text-sm text-gray-700 leading-relaxed mb-3">{aiOverview}</p>
-                )}
-                {transformedQuery && (
-                  <p className="text-xs text-gray-500">
-                    <span className="font-medium text-gray-600">Modified query:</span> {transformedQuery}
-                  </p>
+                {loading ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-3 bg-red-100 rounded-full w-full" />
+                    <div className="h-3 bg-red-100 rounded-full w-5/6" />
+                    <div className="h-3 bg-red-100 rounded-full w-4/6" />
+                  </div>
+                ) : (
+                  <>
+                    {aiOverview && (
+                      <p className="text-sm text-gray-700 leading-relaxed mb-3">{aiOverview}</p>
+                    )}
+                    {transformedQuery && (
+                      <p className="text-xs text-gray-500">
+                        <span className="font-medium text-gray-600">Modified query:</span> {transformedQuery}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -268,7 +278,7 @@ export function ResultsPage() {
               ) : results.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                   {results.map((restaurant) => (
-                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} querySignals={querySignals} />
+                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} transformedQuery={transformedQuery} querySignals={querySignals} />
                   ))}
                 </div>
               ) : (

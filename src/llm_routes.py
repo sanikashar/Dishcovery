@@ -228,6 +228,7 @@ def register_explain_route(app):
         data = request.get_json() or {}
         business_id = (data.get("business_id") or "").strip()
         query = (data.get("query") or "").strip()
+        transformed_query = (data.get("transformed_query") or "").strip()
 
         if not business_id or not query:
             return jsonify({"error": "business_id and query are required", "explanation": None}), 400
@@ -275,8 +276,11 @@ def register_explain_route(app):
             "explaining why this specific restaurant matches the query. "
             "Be concrete — reference the restaurant's actual attributes, not generic praise."
         )
+        query_line = f"User query: \"{query}\""
+        if transformed_query and transformed_query != query:
+            query_line += f"\nOptimized search query: \"{transformed_query}\""
         user_prompt = (
-            f"User query: \"{query}\"\n\n"
+            f"{query_line}\n\n"
             f"Restaurant: {name}\n"
             f"Categories: {categories}\n"
             f"Ambience: {ambience_terms or 'not specified'}\n"

@@ -33,6 +33,7 @@ export interface Restaurant {
 interface RestaurantCardProps {
   restaurant: Restaurant;
   query?: string;
+  transformedQuery?: string | null;
   querySignals?: string[];
 }
 
@@ -54,7 +55,7 @@ const GENERIC_CATEGORIES = new Set([
   "Hotels & Travel",
 ]);
 
-export function RestaurantCard({ restaurant, query, querySignals = [] }: RestaurantCardProps) {
+export function RestaurantCard({ restaurant, query, transformedQuery, querySignals = [] }: RestaurantCardProps) {
   const [explainOpen, setExplainOpen] = useState(false);
   const [llmExplanation, setLlmExplanation] = useState<string | null>(null);
   const [explainLoading, setExplainLoading] = useState(false);
@@ -69,7 +70,7 @@ export function RestaurantCard({ restaurant, query, querySignals = [] }: Restaur
         const res = await fetch("/api/explain", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ business_id: restaurant.business_id, query: query ?? "" }),
+          body: JSON.stringify({ business_id: restaurant.business_id, query: query ?? "", transformed_query: transformedQuery ?? null }),
         });
         const json = await res.json();
         if (json.explanation) {
