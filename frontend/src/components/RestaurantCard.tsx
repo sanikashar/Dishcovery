@@ -103,7 +103,6 @@ export function RestaurantCard({ restaurant, query, transformedQuery, querySigna
     (cat) => !GENERIC_CATEGORIES.has(cat) && cat !== primaryCuisine,
   );
   const derivedTags = [...new Set([...ambienceTags, ...categoryTags])];
-  const ambienceSet = new Set(ambienceTags.map((t) => t.toLowerCase()));
 
   const relevantSet = new Set(
     (restaurant.relevantTags ?? []).map((t) => t.toLowerCase()),
