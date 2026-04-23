@@ -50,5 +50,6 @@ json_template/
 templates/
 static/
 src/bert_cache_*.pkl
+src/tfidf_cache_*.pkl
 src/__pycache__/
 
