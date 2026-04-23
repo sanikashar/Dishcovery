@@ -39,6 +39,33 @@ def load_processed_data():
     return _PROCESSED_DATA
 
 
+def prewarm_all_cities():
+    """Load data and pre-build (or load from disk) TF-IDF+SVD corpora for all cities."""
+    print("[search] Pre-warming: loading restaurant data...")
+    processed_data = load_processed_data()
+    if processed_data is None:
+        print("[search] Pre-warm failed: could not load data")
+        return
+
+    cities = sorted({
+        r["business"].get("city", "").lower().strip()
+        for r in processed_data
+        if r["business"].get("city", "").strip()
+    })
+    print(f"[search] Pre-warming corpora for {len(cities)} cities...")
+    for city in cities:
+        if city in _CORPUS_CACHE:
+            continue
+        city_restaurants = [
+            r for r in processed_data
+            if r["business"].get("city", "").lower().strip() == city
+        ]
+        if not city_restaurants:
+            continue
+        _CORPUS_CACHE[city] = build_corpus(city_restaurants, model_type=SEARCH_SIMILARITY_MODEL)
+    print(f"[search] Pre-warm complete — {len(_CORPUS_CACHE)} city corpora ready")
+
+
 # gets top 10 restaurants by name, no duplicates, and returns them sorted by match score
 PRICE_MAP = {
     1: "$",

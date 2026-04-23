@@ -32,3 +32,4 @@ package-lock.json
 
 .env
 src/bert_cache_*.pkl
+src/tfidf_cache_*.pkl

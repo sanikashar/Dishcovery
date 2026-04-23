@@ -1,12 +1,12 @@
 import ast
 import collections
 import difflib
+import gzip
 import hashlib
 import json
 import math
 import os
 import re
-import os
 import numpy as np
 import pickle
 import gensim.downloader as api
@@ -33,6 +33,52 @@ Then we combine them with configurable weights that default to
 prioritising ambience
 '''
 BERT_CACHE_DIR = os.path.dirname(__file__)
+TFIDF_CACHE_DIR = os.path.dirname(__file__)
+
+
+def _tfidf_cache_key(restaurants: list[dict], n_components: int) -> str:
+    payload = {
+        "business_ids": sorted(r.get("business", {}).get("business_id", "") for r in restaurants),
+        "n_components": n_components,
+    }
+    encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def _tfidf_cache_path(cache_key: str) -> str:
+    return os.path.join(TFIDF_CACHE_DIR, f"tfidf_cache_{cache_key}.pkl")
+
+
+def _save_tfidf_corpus(corpus: dict, cache_key: str):
+    # Exclude restaurants — they live in _PROCESSED_DATA already, no need to duplicate
+    saveable = {
+        "model_type": corpus["model_type"],
+        "vectorizer": corpus["vectorizer"],
+        "svd":        corpus["svd"],
+        "doc_vectors": corpus["doc_vectors"],
+    }
+    cache_path = _tfidf_cache_path(cache_key)
+    with gzip.open(cache_path, "wb", compresslevel=3) as f:
+        pickle.dump(saveable, f)
+    size_mb = os.path.getsize(cache_path) / (1024 * 1024)
+    print(f"[similarity] TF-IDF+SVD corpus cached to {cache_path} ({size_mb:.1f} MB)")
+
+
+def _load_tfidf_corpus(cache_key: str, restaurants: list[dict]) -> dict | None:
+    cache_path = _tfidf_cache_path(cache_key)
+    if not os.path.exists(cache_path):
+        return None
+    print(f"[similarity] Loading cached TF-IDF+SVD corpus from {cache_path}...")
+    try:
+        with gzip.open(cache_path, "rb") as f:
+            corpus = pickle.load(f)
+        corpus["restaurants"] = restaurants
+        print("[similarity] TF-IDF+SVD corpus loaded from cache ✓")
+        return corpus
+    except Exception as e:
+        print(f"[similarity] Cache load failed ({e}), rebuilding...")
+        os.remove(cache_path)
+        return None
 
 
 def _bert_cache_key(restaurants: list[dict], field_weights: dict) -> str:
@@ -185,6 +231,11 @@ def build_corpus(restaurants: list[dict], model_type: str = "word2vec", field_we
     
 # TF-IDF corpus
 def _build_tfidf_svd_corpus(restaurants: list[dict], n_components: int = 100) -> dict:
+    cache_key = _tfidf_cache_key(restaurants, n_components)
+    cached = _load_tfidf_corpus(cache_key, restaurants)
+    if cached is not None:
+        return cached
+
     documents = []
     for r in restaurants:
         fields = extract_fields(r)
@@ -195,15 +246,16 @@ def _build_tfidf_svd_corpus(restaurants: list[dict], n_components: int = 100) ->
             f"{fields['reviews']} "
             f"{fields['practical']}"
         )
- 
+
     vectorizer = TfidfVectorizer(
         stop_words="english",
         sublinear_tf=True,
         min_df=2,
+        max_features=30_000,
         ngram_range=(1, 2),
     )
     tfidf_matrix = vectorizer.fit_transform(documents)
-    
+
     max_k = min(tfidf_matrix.shape) - 1
     n_components = min(n_components, max_k)
 
@@ -212,14 +264,16 @@ def _build_tfidf_svd_corpus(restaurants: list[dict], n_components: int = 100) ->
 
     print(f"[similarity] TF-IDF+SVD ready — {n_components} dims, "
           f"variance explained: {svd.explained_variance_ratio_.sum():.1%}")
- 
-    return {
+
+    corpus = {
         "model_type":  "tfidf+svd",
         "vectorizer":  vectorizer,
-        "svd":         svd,          
+        "svd":         svd,
         "doc_vectors": doc_vectors,
         "restaurants": restaurants,
     }
+    _save_tfidf_corpus(corpus, cache_key)
+    return corpus
  # Word2Vec corpus  (late-fusion field vectors)
  
 def _build_word2vec_corpus(restaurants, field_weights):

@@ -7,6 +7,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 from flask_cors import CORS
 from models import db, Episode, Review
 from routes import register_routes
+from search import prewarm_all_cities
 
 # src/ directory and project root (one level up)
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +28,8 @@ db.init_app(app)
 
 # Register routes
 register_routes(app)
+
+prewarm_all_cities()
 
 # Function to initialize database, change this to your own database initialization logic
 # def init_db():
