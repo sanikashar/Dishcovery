@@ -6,6 +6,7 @@ const CITY_PLACEHOLDER = "City";
 
 const CITY_OPTIONS = [
   CITY_PLACEHOLDER,
+  "Philadelphia",
   "Tampa",
   "Indianapolis",
   "Nashville",
