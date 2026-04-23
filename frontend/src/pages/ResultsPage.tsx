@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { SearchBar } from "../components/SearchBar";
 import { RestaurantCard, type Restaurant } from "../components/RestaurantCard";
-import { UtensilsCrossed, Pizza, Coffee, IceCream, Cake, Cookie, Croissant, Sandwich, Cherry } from "lucide-react";
+import { UtensilsCrossed, Pizza, Coffee, IceCream, Cake, Cookie, Croissant, Sandwich, Cherry, Sparkles } from "lucide-react";
 import dishcoveryLogo from "../assets/logo.png";
 import { getQueryAwareTags } from "../utils/matchExplanation";
 
@@ -66,6 +66,8 @@ export function ResultsPage() {
   const [activePrice, setActivePrice] = useState(initialPrice);
   const [results, setResults] = useState<Restaurant[]>([]);
   const [querySignals, setQuerySignals] = useState<string[]>([]);
+  const [aiOverview, setAiOverview] = useState<string | null>(null);
+  const [transformedQuery, setTransformedQuery] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [useLlm, setUseLlm] = useState(false);
 
@@ -98,6 +100,8 @@ export function ResultsPage() {
     if (!trimmedQuery || !hasCity) {
       setResults([]);
       setQuerySignals([]);
+      setAiOverview(null);
+      setTransformedQuery(null);
       setLoading(false);
       return;
     }
@@ -113,6 +117,8 @@ export function ResultsPage() {
 
         const nextQuerySignals: string[] = extractDimensionLabels(data?.query_latent_dimensions?.top_dimensions, 3);
         setQuerySignals(nextQuerySignals);
+        setAiOverview(data.ai_overview ?? null);
+        setTransformedQuery(data.transformed_query ?? null);
 
         const enriched = list.map((restaurant) => {
           const categoriesList = Array.isArray(restaurant.categories)
@@ -137,6 +143,8 @@ export function ResultsPage() {
       } catch {
         setResults([]);
         setQuerySignals([]);
+        setAiOverview(null);
+        setTransformedQuery(null);
       } finally {
         setLoading(false);
       }
@@ -236,6 +244,33 @@ export function ResultsPage() {
             </div>
 
 
+            {useLlm && activeQuery && activeCity !== CITY_PLACEHOLDER && (
+              <div className="mb-6 bg-white rounded-2xl p-5 border border-red-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="size-4 text-red-500" />
+                  <span className="text-sm font-medium text-red-600">AI Overview</span>
+                </div>
+                {loading ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-3 bg-red-100 rounded-full w-full" />
+                    <div className="h-3 bg-red-100 rounded-full w-5/6" />
+                    <div className="h-3 bg-red-100 rounded-full w-4/6" />
+                  </div>
+                ) : (
+                  <>
+                    {aiOverview && (
+                      <p className="text-sm text-gray-700 leading-relaxed mb-3">{aiOverview}</p>
+                    )}
+                    {transformedQuery && (
+                      <p className="text-xs text-gray-500">
+                        <span className="font-medium text-gray-600">Modified query:</span> {transformedQuery}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {loading ? (
                 <div className="text-center py-12">
                   <p className="text-gray-500">Loading results...</p>
@@ -243,7 +278,7 @@ export function ResultsPage() {
               ) : results.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
                   {results.map((restaurant) => (
-                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} querySignals={querySignals} />
+                    <RestaurantCard key={restaurant.business_id} restaurant={restaurant} query={activeQuery} transformedQuery={transformedQuery} querySignals={querySignals} />
                   ))}
                 </div>
               ) : (

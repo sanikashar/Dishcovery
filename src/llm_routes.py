@@ -146,12 +146,73 @@ def register_rag_search_route(app):
         ir_result = restaurant_search(transformed_query)
         results = ir_result.get("results", [])
 
-        shown_transformed = transformed_query if transformed_query != original_query else None
+        # AI overview from top results
+        ai_overview = None
+        if results:
+            # Prompt written and _fmt_result debugged with limited help of GenAI
+            def _fmt_result(r, rank):
+                ambience = ", ".join(r.get("ambience") or []) or "not specified"
+                categories = (r.get("categories") or "")
+                if isinstance(categories, list):
+                    categories = ", ".join(categories)
+                price = r.get("priceRange") or (
+                    "$" * r["priceTier"] if r.get("priceTier") else "unknown"
+                )
+                score = round((r.get("matchScore") or 0) * 100)
+                hours_raw = r.get("hours") or {}
+                hours_str = "; ".join(
+                    f"{day}: {h}" for day, h in list(hours_raw.items())[:3]
+                ) if hours_raw else "not available"
+                return (
+                    f"{rank}. {r.get('name')} — {score}% match\n"
+                    f"   Categories: {categories[:120]}\n"
+                    f"   Ambience tags: {ambience}\n"
+                    f"   Rating: {r.get('stars') or r.get('rating') or 'N/A'}/5  Price: {price}\n"
+                    f"   Hours (sample): {hours_str}"
+                )
+
+            results_summary = "\n\n".join(
+                _fmt_result(r, i + 1) for i, r in enumerate(results[:5])
+            )
+            query_note = (
+                f"Original user query: \"{original_query}\"\n"
+                f"Optimized search query used: \"{transformed_query}\""
+                if transformed_query != original_query
+                else f"Query: \"{original_query}\""
+            )
+            try:
+                overview_messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a helpful restaurant recommendation assistant. "
+                            "Given a user's search query and the top matching restaurants with their details, "
+                            "write a 2-3 sentence overview summarizing what kinds of options were found "
+                            "and why they match the query. Reference specific restaurant names, ambience tags, "
+                            "cuisine types, or ratings where relevant. Be specific and concise. No bullet points."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"{query_note}\n\n"
+                            f"Top matching restaurants:\n\n{results_summary}\n\n"
+                            "Write a 2-3 sentence overview of these results."
+                        ),
+                    },
+                ]
+                overview_response = client.chat(overview_messages)
+                ai_overview = (overview_response.get("content") or "").strip() or None
+            except Exception as e:
+                logger.warning(f"AI overview generation failed: {e}")
+
+        shown_transformed = transformed_query
         return jsonify({
             "error": ir_result.get("error"),
             "results": results,
             "query_latent_dimensions": ir_result.get("query_latent_dimensions"),
             "transformed_query": shown_transformed,
+            "ai_overview": ai_overview,
         })
 
 
@@ -167,6 +228,7 @@ def register_explain_route(app):
         data = request.get_json() or {}
         business_id = (data.get("business_id") or "").strip()
         query = (data.get("query") or "").strip()
+        transformed_query = (data.get("transformed_query") or "").strip()
 
         if not business_id or not query:
             return jsonify({"error": "business_id and query are required", "explanation": None}), 400
@@ -214,8 +276,11 @@ def register_explain_route(app):
             "explaining why this specific restaurant matches the query. "
             "Be concrete — reference the restaurant's actual attributes, not generic praise."
         )
+        query_line = f"User query: \"{query}\""
+        if transformed_query and transformed_query != query:
+            query_line += f"\nOptimized search query: \"{transformed_query}\""
         user_prompt = (
-            f"User query: \"{query}\"\n\n"
+            f"{query_line}\n\n"
             f"Restaurant: {name}\n"
             f"Categories: {categories}\n"
             f"Ambience: {ambience_terms or 'not specified'}\n"
